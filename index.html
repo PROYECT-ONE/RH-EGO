@@ -1,0 +1,2084 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Sistema EGO PRO - Gestión de Personal</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/inter@5.0.8/index.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
+    <style>
+        * { font-family: 'Inter', system-ui, sans-serif; -webkit-tap-highlight-color: transparent; }
+        @media print {
+            body * { visibility: hidden; }
+            #print-area, #print-area * { visibility: visible; }
+            #print-area { position: absolute; left: 0; top: 0; width: 100%; }
+            .no-print { display: none !important; }
+        }
+        .tab-content { display: none; animation: fadeIn 0.3s ease; }
+        .tab-content.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes slideIn { from { transform: translateX(120%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        @keyframes slideOut { from { transform: translateX(0); opacity: 1; } to { transform: translateX(120%); opacity: 0; } }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
+        .toast-enter { animation: slideIn 0.3s ease forwards; }
+        .toast-exit { animation: slideOut 0.3s ease forwards; }
+        .sidebar-btn { position: relative; overflow: hidden; }
+        .sidebar-btn::before { content: ''; position: absolute; left: 0; top: 0; width: 3px; height: 100%; background: #10b981; transform: scaleY(0); transition: transform 0.2s; }
+        .sidebar-btn.active::before { transform: scaleY(1); }
+        .card-hover { transition: all 0.2s ease; }
+        .card-hover:hover { transform: translateY(-2px); box-shadow: 0 10px 25px -5px rgba(0,0,0,0.08); }
+        input:focus, select:focus, textarea:focus { border-color: #10b981 !important; outline: none; }
+        .scrollbar-thin::-webkit-scrollbar { width: 6px; height: 6px; }
+        .scrollbar-thin::-webkit-scrollbar-track { background: #f1f5f9; }
+        .scrollbar-thin::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        .badge-pulse { animation: pulse 2s infinite; }
+        .sync-status { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+        .sync-online { background-color: #10b981; box-shadow: 0 0 8px #10b981; }
+        .sync-offline { background-color: #ef4444; }
+        .sync-syncing { background-color: #f59e0b; animation: pulse 1s infinite; }
+        .sidebar-mobile { position: fixed; left: 0; top: 0; height: 100vh; z-index: 50; transform: translateX(-100%); transition: transform 0.3s ease; width: 280px; }
+        .sidebar-mobile.open { transform: translateX(0); }
+        .sidebar-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 40; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; }
+        .sidebar-overlay.active { opacity: 1; pointer-events: auto; }
+        .mobile-header { position: sticky; top: 0; z-index: 30; }
+        .table-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+        @media (max-width: 768px) {
+            .touch-target { min-height: 44px; }
+        }
+        .status-activo { background: #dcfce7; color: #166534; }
+        .status-baja { background: #fee2e2; color: #991b1b; }
+        .status-vigente { background: #dcfce7; color: #166534; }
+        .status-proximo { background: #fef3c7; color: #92400e; }
+        .status-vencido { background: #fee2e2; color: #991b1b; }
+        .status-pendiente { background: #fef3c7; color: #92400e; }
+        .status-completado { background: #dcfce7; color: #166534; }
+        .status-no-aplicado { background: #f1f5f9; color: #64748b; }
+    </style>
+</head>
+<body class="bg-gray-100 h-screen flex overflow-hidden">
+
+    <div id="sidebar-overlay" class="sidebar-overlay lg:hidden" onclick="toggleSidebar()"></div>
+
+    <!-- Sidebar Desktop -->
+    <aside class="hidden lg:flex w-64 bg-gray-900 text-white flex-col h-full shadow-2xl z-20 flex-shrink-0">
+        <div class="p-6 text-center border-b border-gray-800">
+            <div class="inline-flex items-center justify-center w-14 h-14 bg-emerald-600/20 rounded-2xl mb-3">
+                <i class="fa-solid fa-users text-emerald-400 text-2xl"></i>
+            </div>
+            <h1 class="text-lg font-bold tracking-wider">EGO PRO RH</h1>
+            <p class="text-xs text-gray-500 mt-1 flex items-center justify-center">
+                <span id="sync-indicator" class="sync-status sync-offline"></span>
+                <span id="sync-text">Conectando...</span>
+            </p>
+        </div>
+        <nav class="flex-1 p-4 space-y-1 overflow-y-auto scrollbar-thin">
+            <button onclick="showTab('dashboard')" id="btn-dashboard" class="sidebar-btn active w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-left bg-emerald-600 text-white transition-all">
+                <i class="fa-solid fa-chart-pie w-5"></i><span class="text-sm font-medium">Dashboard</span>
+            </button>
+            <button onclick="showTab('colaboradores')" id="btn-colaboradores" class="sidebar-btn w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-left text-gray-400 hover:bg-gray-800 hover:text-white transition-all">
+                <i class="fa-solid fa-user-group w-5"></i><span class="text-sm font-medium">Colaboradores</span>
+            </button>
+            <button onclick="showTab('contratos')" id="btn-contratos" class="sidebar-btn w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-left text-gray-400 hover:bg-gray-800 hover:text-white transition-all">
+                <i class="fa-solid fa-file-signature w-5"></i><span class="text-sm font-medium">Contratos</span>
+            </button>
+            <button onclick="showTab('vacaciones')" id="btn-vacaciones" class="sidebar-btn w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-left text-gray-400 hover:bg-gray-800 hover:text-white transition-all">
+                <i class="fa-solid fa-umbrella-beach w-5"></i><span class="text-sm font-medium">Vacaciones</span>
+            </button>
+            <button onclick="showTab('evaluaciones')" id="btn-evaluaciones" class="sidebar-btn w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-left text-gray-400 hover:bg-gray-800 hover:text-white transition-all">
+                <i class="fa-solid fa-clipboard-check w-5"></i><span class="text-sm font-medium">Evaluaciones</span>
+            </button>
+            <button onclick="showTab('movimientos')" id="btn-movimientos" class="sidebar-btn w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-left text-gray-400 hover:bg-gray-800 hover:text-white transition-all">
+                <i class="fa-solid fa-arrow-right-arrow-left w-5"></i><span class="text-sm font-medium">Ingresos y Bajas</span>
+            </button>
+            <button onclick="showTab('expediente')" id="btn-expediente" class="sidebar-btn w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-left text-gray-400 hover:bg-gray-800 hover:text-white transition-all">
+                <i class="fa-solid fa-folder-open w-5"></i><span class="text-sm font-medium">Expediente</span>
+            </button>
+            <button onclick="showTab('reportes')" id="btn-reportes" class="sidebar-btn w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-left text-gray-400 hover:bg-gray-800 hover:text-white transition-all">
+                <i class="fa-solid fa-file-export w-5"></i><span class="text-sm font-medium">Reportes</span>
+            </button>
+        </nav>
+        <div class="p-4 border-t border-gray-800">
+            <div class="flex items-center space-x-3 px-2">
+                <div class="w-8 h-8 bg-emerald-600 rounded-full flex items-center justify-center text-xs font-bold">RH</div>
+                <div class="flex-1 min-w-0">
+                    <p class="text-xs font-medium truncate">Recursos Humanos</p>
+                    <p class="text-xs text-gray-500">Sistema Integral</p>
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Sidebar Móvil -->
+    <aside id="sidebar-mobile" class="sidebar-mobile lg:hidden bg-gray-900 text-white flex flex-col h-full shadow-2xl">
+        <div class="p-6 text-center border-b border-gray-800">
+            <div class="inline-flex items-center justify-center w-14 h-14 bg-emerald-600/20 rounded-2xl mb-3">
+                <i class="fa-solid fa-users text-emerald-400 text-2xl"></i>
+            </div>
+            <h1 class="text-lg font-bold tracking-wider">EGO PRO RH</h1>
+            <p class="text-xs text-gray-500 mt-1 flex items-center justify-center">
+                <span id="sync-indicator-mobile" class="sync-status sync-offline"></span>
+                <span id="sync-text-mobile">Conectando...</span>
+            </p>
+        </div>
+        <nav class="flex-1 p-4 space-y-1 overflow-y-auto scrollbar-thin">
+            <button onclick="showTab('dashboard'); toggleSidebar()" class="sidebar-btn active w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-left bg-emerald-600 text-white">
+                <i class="fa-solid fa-chart-pie w-5"></i><span class="text-sm font-medium">Dashboard</span>
+            </button>
+            <button onclick="showTab('colaboradores'); toggleSidebar()" class="sidebar-btn w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-left text-gray-400 hover:bg-gray-800 hover:text-white">
+                <i class="fa-solid fa-user-group w-5"></i><span class="text-sm font-medium">Colaboradores</span>
+            </button>
+            <button onclick="showTab('contratos'); toggleSidebar()" class="sidebar-btn w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-left text-gray-400 hover:bg-gray-800 hover:text-white">
+                <i class="fa-solid fa-file-signature w-5"></i><span class="text-sm font-medium">Contratos</span>
+            </button>
+            <button onclick="showTab('vacaciones'); toggleSidebar()" class="sidebar-btn w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-left text-gray-400 hover:bg-gray-800 hover:text-white">
+                <i class="fa-solid fa-umbrella-beach w-5"></i><span class="text-sm font-medium">Vacaciones</span>
+            </button>
+            <button onclick="showTab('evaluaciones'); toggleSidebar()" class="sidebar-btn w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-left text-gray-400 hover:bg-gray-800 hover:text-white">
+                <i class="fa-solid fa-clipboard-check w-5"></i><span class="text-sm font-medium">Evaluaciones</span>
+            </button>
+            <button onclick="showTab('movimientos'); toggleSidebar()" class="sidebar-btn w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-left text-gray-400 hover:bg-gray-800 hover:text-white">
+                <i class="fa-solid fa-arrow-right-arrow-left w-5"></i><span class="text-sm font-medium">Ingresos y Bajas</span>
+            </button>
+            <button onclick="showTab('expediente'); toggleSidebar()" class="sidebar-btn w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-left text-gray-400 hover:bg-gray-800 hover:text-white">
+                <i class="fa-solid fa-folder-open w-5"></i><span class="text-sm font-medium">Expediente</span>
+            </button>
+            <button onclick="showTab('reportes'); toggleSidebar()" class="sidebar-btn w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-left text-gray-400 hover:bg-gray-800 hover:text-white">
+                <i class="fa-solid fa-file-export w-5"></i><span class="text-sm font-medium">Reportes</span>
+            </button>
+        </nav>
+    </aside>
+
+    <!-- Contenido Principal -->
+    <main class="flex-1 h-full overflow-y-auto bg-gray-50 scrollbar-thin flex flex-col">
+        
+        <!-- Header Móvil -->
+        <div class="mobile-header lg:hidden bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between shadow-sm">
+            <button onclick="toggleSidebar()" class="text-gray-600 hover:text-gray-900 p-2 -ml-2 touch-target flex items-center justify-center w-10 h-10">
+                <i class="fa-solid fa-bars text-xl"></i>
+            </button>
+            <h1 class="text-base font-bold text-gray-800 flex items-center">
+                <span id="sync-indicator-header" class="sync-status sync-offline mr-2"></span>
+                EGO PRO RH
+            </h1>
+            <div class="w-10"></div>
+        </div>
+
+        <div class="p-4 lg:p-6 xl:p-8 flex-1">
+        
+        <!-- DASHBOARD -->
+        <div id="dashboard" class="tab-content active">
+            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 lg:mb-6 gap-3">
+                <div>
+                    <h2 class="text-xl lg:text-2xl font-bold text-gray-800">Panel de Control RH</h2>
+                    <p class="text-sm text-gray-500 mt-1">Resumen general del personal</p>
+                </div>
+                <div class="flex items-center space-x-2 text-sm text-gray-500 bg-white px-3 lg:px-4 py-2 rounded-lg border">
+                    <i class="fa-regular fa-calendar"></i>
+                    <span id="dash-date"></span>
+                </div>
+            </div>
+            
+            <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4 mb-6">
+                <div class="bg-white p-3 lg:p-5 rounded-xl shadow-sm border border-gray-100 card-hover">
+                    <div class="flex items-center justify-between mb-2 lg:mb-3">
+                        <div class="p-2 lg:p-2.5 bg-blue-100 text-blue-600 rounded-lg"><i class="fa-solid fa-user-check text-sm lg:text-base"></i></div>
+                        <span class="text-xs text-emerald-600 font-medium bg-emerald-50 px-2 py-0.5 rounded-full">Activos</span>
+                    </div>
+                    <p class="text-xl lg:text-2xl font-bold text-gray-800" id="dash-activos">0</p>
+                    <p class="text-xs text-gray-500 mt-1">Colaboradores activos</p>
+                </div>
+                <div class="bg-white p-3 lg:p-5 rounded-xl shadow-sm border border-gray-100 card-hover">
+                    <div class="flex items-center justify-between mb-2 lg:mb-3">
+                        <div class="p-2 lg:p-2.5 bg-red-100 text-red-600 rounded-lg"><i class="fa-solid fa-user-xmark text-sm lg:text-base"></i></div>
+                        <span class="text-xs text-red-600 font-medium bg-red-50 px-2 py-0.5 rounded-full">Bajas</span>
+                    </div>
+                    <p class="text-xl lg:text-2xl font-bold text-gray-800" id="dash-bajas">0</p>
+                    <p class="text-xs text-gray-500 mt-1">Personal dado de baja</p>
+                </div>
+                <div class="bg-white p-3 lg:p-5 rounded-xl shadow-sm border border-gray-100 card-hover">
+                    <div class="flex items-center justify-between mb-2 lg:mb-3">
+                        <div class="p-2 lg:p-2.5 bg-amber-100 text-amber-600 rounded-lg"><i class="fa-solid fa-triangle-exclamation text-sm lg:text-base"></i></div>
+                        <span class="text-xs text-amber-600 font-medium bg-amber-50 px-2 py-0.5 rounded-full badge-pulse">Alertas</span>
+                    </div>
+                    <p class="text-xl lg:text-2xl font-bold text-gray-800" id="dash-contratos-alerta">0</p>
+                    <p class="text-xs text-gray-500 mt-1">Contratos por vencer</p>
+                </div>
+                <div class="bg-white p-3 lg:p-5 rounded-xl shadow-sm border border-gray-100 card-hover">
+                    <div class="flex items-center justify-between mb-2 lg:mb-3">
+                        <div class="p-2 lg:p-2.5 bg-purple-100 text-purple-600 rounded-lg"><i class="fa-solid fa-clipboard-check text-sm lg:text-base"></i></div>
+                        <span class="text-xs text-purple-600 font-medium bg-purple-50 px-2 py-0.5 rounded-full">Evaluaciones</span>
+                    </div>
+                    <p class="text-xl lg:text-2xl font-bold text-gray-800" id="dash-evaluaciones-pendientes">0</p>
+                    <p class="text-xs text-gray-500 mt-1">Evaluaciones pendientes</p>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6 mb-6">
+                <div class="bg-white p-4 lg:p-5 rounded-xl shadow-sm border border-gray-100 lg:col-span-2">
+                    <h3 class="font-bold text-gray-800 mb-4 text-sm lg:text-base">Distribución por Planta</h3>
+                    <div style="height: 250px;"><canvas id="plantaChart"></canvas></div>
+                </div>
+                <div class="bg-white p-4 lg:p-5 rounded-xl shadow-sm border border-gray-100">
+                    <h3 class="font-bold text-gray-800 mb-4 text-sm lg:text-base">Estatus de Contratos</h3>
+                    <div style="height: 250px;"><canvas id="contratoChart"></canvas></div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6 mb-6">
+                <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                    <div class="p-4 lg:p-5 border-b flex items-center justify-between">
+                        <h3 class="font-bold text-gray-800 text-sm lg:text-base"><i class="fa-solid fa-bell text-amber-500 mr-2"></i>Contratos Próximos a Vencer</h3>
+                        <span class="text-xs text-gray-500" id="alertas-contratos-count">0 alertas</span>
+                    </div>
+                    <div class="table-wrapper">
+                        <table class="w-full text-left border-collapse min-w-[600px]">
+                            <thead>
+                                <tr class="bg-gray-50 text-gray-600 text-xs uppercase tracking-wider border-b">
+                                    <th class="p-3 lg:p-4">Empleado</th>
+                                    <th class="p-3 lg:p-4">Tipo</th>
+                                    <th class="p-3 lg:p-4 text-center">Vence</th>
+                                    <th class="p-3 lg:p-4 text-center">Días</th>
+                                    <th class="p-3 lg:p-4 text-center">Estatus</th>
+                                </tr>
+                            </thead>
+                            <tbody id="alertas-contratos-table" class="divide-y divide-gray-100 text-sm"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                    <div class="p-4 lg:p-5 border-b flex items-center justify-between">
+                        <h3 class="font-bold text-gray-800 text-sm lg:text-base"><i class="fa-solid fa-clipboard-check text-purple-500 mr-2"></i>Evaluaciones Pendientes</h3>
+                        <span class="text-xs text-gray-500" id="alertas-evaluaciones-count">0 alertas</span>
+                    </div>
+                    <div class="table-wrapper">
+                        <table class="w-full text-left border-collapse min-w-[500px]">
+                            <thead>
+                                <tr class="bg-gray-50 text-gray-600 text-xs uppercase tracking-wider border-b">
+                                    <th class="p-3 lg:p-4">Empleado</th>
+                                    <th class="p-3 lg:p-4">Tipo</th>
+                                    <th class="p-3 lg:p-4 text-center">Mes</th>
+                                    <th class="p-3 lg:p-4 text-center">Estatus</th>
+                                </tr>
+                            </thead>
+                            <tbody id="alertas-evaluaciones-table" class="divide-y divide-gray-100 text-sm"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- COLABORADORES -->
+        <div id="colaboradores" class="tab-content">
+            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 lg:mb-6 gap-3">
+                <div>
+                    <h2 class="text-xl lg:text-2xl font-bold text-gray-800">Base de Colaboradores</h2>
+                    <p class="text-sm text-gray-500 mt-1">Expediente único de personal</p>
+                </div>
+                <button onclick="openNewColaboradorModal()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 lg:px-4 py-2 rounded-lg text-sm font-medium transition shadow-sm flex items-center space-x-2 touch-target">
+                    <i class="fa-solid fa-plus"></i> <span>Nuevo Colaborador</span>
+                </button>
+            </div>
+
+            <div class="bg-white p-3 lg:p-4 rounded-xl shadow-sm border border-gray-100 mb-4 lg:mb-6">
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                    <div class="relative sm:col-span-2">
+                        <i class="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
+                        <input type="text" id="search-colab" oninput="renderColaboradores()" placeholder="Buscar por nombre o número..." class="w-full border rounded-lg p-2.5 pl-9 text-sm outline-none touch-target">
+                    </div>
+                    <select id="filter-planta" onchange="renderColaboradores()" class="border rounded-lg p-2.5 text-sm outline-none touch-target">
+                        <option value="all">Todas las plantas</option>
+                    </select>
+                    <select id="filter-estatus" onchange="renderColaboradores()" class="border rounded-lg p-2.5 text-sm outline-none touch-target">
+                        <option value="all">Todos los estatus</option>
+                        <option value="Activo">Activos</option>
+                        <option value="Baja">Bajas</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                <div class="table-wrapper">
+                    <table class="w-full text-left border-collapse min-w-[900px]">
+                        <thead>
+                            <tr class="bg-gray-50 text-gray-600 text-xs uppercase tracking-wider border-b">
+                                <th class="p-3 lg:p-4">No. Emp</th>
+                                <th class="p-3 lg:p-4">Nombre</th>
+                                <th class="p-3 lg:p-4">Puesto</th>
+                                <th class="p-3 lg:p-4">Área</th>
+                                <th class="p-3 lg:p-4">Planta</th>
+                                <th class="p-3 lg:p-4 text-center">Antigüedad</th>
+                                <th class="p-3 lg:p-4 text-center">Estatus</th>
+                                <th class="p-3 lg:p-4 text-center">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="colaboradores-table" class="divide-y divide-gray-100 text-sm"></tbody>
+                    </table>
+                </div>
+                <div class="p-3 lg:p-4 bg-gray-50 border-t text-sm text-gray-500 flex justify-between items-center">
+                    <span id="colab-count">0 colaboradores</span>
+                    <span id="colab-activos-count">0 activos</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- CONTRATOS -->
+        <div id="contratos" class="tab-content">
+            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 lg:mb-6 gap-3">
+                <div>
+                    <h2 class="text-xl lg:text-2xl font-bold text-gray-800">Control de Contratos</h2>
+                    <p class="text-sm text-gray-500 mt-1">Monitoreo de vencimientos y renovaciones</p>
+                </div>
+                <button onclick="openNuevoContratoModal()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 lg:px-4 py-2 rounded-lg text-sm font-medium transition shadow-sm flex items-center space-x-2 touch-target">
+                    <i class="fa-solid fa-plus"></i> <span>Nuevo Contrato</span>
+                </button>
+            </div>
+
+            <div class="bg-white p-3 lg:p-4 rounded-xl shadow-sm border border-gray-100 mb-4 lg:mb-6">
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div class="relative sm:col-span-2">
+                        <i class="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
+                        <input type="text" id="search-contrato" oninput="renderContratos()" placeholder="Buscar colaborador..." class="w-full border rounded-lg p-2.5 pl-9 text-sm outline-none touch-target">
+                    </div>
+                    <select id="filter-contrato-estatus" onchange="renderContratos()" class="border rounded-lg p-2.5 text-sm outline-none touch-target">
+                        <option value="all">Todos los estatus</option>
+                        <option value="Vigente">Vigentes</option>
+                        <option value="Proximo">Próximos a vencer</option>
+                        <option value="Vencido">Vencidos</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                <div class="table-wrapper">
+                    <table class="w-full text-left border-collapse min-w-[900px]">
+                        <thead>
+                            <tr class="bg-gray-50 text-gray-600 text-xs uppercase tracking-wider border-b">
+                                <th class="p-3 lg:p-4">Colaborador</th>
+                                <th class="p-3 lg:p-4">Tipo</th>
+                                <th class="p-3 lg:p-4">Inicio</th>
+                                <th class="p-3 lg:p-4">Vencimiento</th>
+                                <th class="p-3 lg:p-4 text-center">Días Rest.</th>
+                                <th class="p-3 lg:p-4 text-center">Estatus</th>
+                                <th class="p-3 lg:p-4 text-center">Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody id="contratos-table" class="divide-y divide-gray-100 text-sm"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- VACACIONES -->
+        <div id="vacaciones" class="tab-content">
+            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 lg:mb-6 gap-3">
+                <div>
+                    <h2 class="text-xl lg:text-2xl font-bold text-gray-800">Control de Vacaciones</h2>
+                    <p class="text-sm text-gray-500 mt-1">Días correspondientes y disfrutados</p>
+                </div>
+                <button onclick="openNuevaVacacionModal()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 lg:px-4 py-2 rounded-lg text-sm font-medium transition shadow-sm flex items-center space-x-2 touch-target">
+                    <i class="fa-solid fa-plus"></i> <span>Registrar Vacaciones</span>
+                </button>
+            </div>
+
+            <div class="bg-white p-3 lg:p-4 rounded-xl shadow-sm border border-gray-100 mb-4 lg:mb-6">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div class="relative sm:col-span-2">
+                        <i class="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
+                        <input type="text" id="search-vacacion" oninput="renderVacaciones()" placeholder="Buscar colaborador..." class="w-full border rounded-lg p-2.5 pl-9 text-sm outline-none touch-target">
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                <div class="table-wrapper">
+                    <table class="w-full text-left border-collapse min-w-[700px]">
+                        <thead>
+                            <tr class="bg-gray-50 text-gray-600 text-xs uppercase tracking-wider border-b">
+                                <th class="p-3 lg:p-4">Colaborador</th>
+                                <th class="p-3 lg:p-4 text-center">Antigüedad</th>
+                                <th class="p-3 lg:p-4 text-center">Corresp.</th>
+                                <th class="p-3 lg:p-4 text-center">Disfrutados</th>
+                                <th class="p-3 lg:p-4 text-center">Disponibles</th>
+                                <th class="p-3 lg:p-4 text-center">Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody id="vacaciones-table" class="divide-y divide-gray-100 text-sm"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- EVALUACIONES -->
+        <div id="evaluaciones" class="tab-content">
+            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 lg:mb-6 gap-3">
+                <div>
+                    <h2 class="text-xl lg:text-2xl font-bold text-gray-800">Control de Evaluaciones</h2>
+                    <p class="text-sm text-gray-500 mt-1">Onboarding, evaluaciones mensuales y salida</p>
+                </div>
+                <button onclick="openNuevaEvaluacionModal()" class="bg-purple-600 hover:bg-purple-700 text-white px-3 lg:px-4 py-2 rounded-lg text-sm font-medium transition shadow-sm flex items-center space-x-2 touch-target">
+                    <i class="fa-solid fa-plus"></i> <span>Registrar Evaluación</span>
+                </button>
+            </div>
+
+            <div class="bg-white p-3 lg:p-4 rounded-xl shadow-sm border border-gray-100 mb-4 lg:mb-6">
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div class="relative sm:col-span-2">
+                        <i class="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
+                        <input type="text" id="search-evaluacion" oninput="renderEvaluaciones()" placeholder="Buscar colaborador..." class="w-full border rounded-lg p-2.5 pl-9 text-sm outline-none touch-target">
+                    </div>
+                    <select id="filter-evaluacion-tipo" onchange="renderEvaluaciones()" class="border rounded-lg p-2.5 text-sm outline-none touch-target">
+                        <option value="all">Todos los tipos</option>
+                        <option value="Onboarding">Onboarding</option>
+                        <option value="Mes 1">Mes 1</option>
+                        <option value="Mes 2">Mes 2</option>
+                        <option value="Mes 3">Mes 3</option>
+                        <option value="Salida">Encuesta de Salida</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden mb-6">
+                <div class="p-4 lg:p-5 border-b">
+                    <h3 class="font-bold text-gray-800 text-sm lg:text-base">Resumen de Evaluaciones por Colaborador</h3>
+                </div>
+                <div class="table-wrapper">
+                    <table class="w-full text-left border-collapse min-w-[1000px]">
+                        <thead>
+                            <tr class="bg-gray-50 text-gray-600 text-xs uppercase tracking-wider border-b">
+                                <th class="p-3 lg:p-4">Colaborador</th>
+                                <th class="p-3 lg:p-4 text-center">Onboarding</th>
+                                <th class="p-3 lg:p-4 text-center">Mes 1</th>
+                                <th class="p-3 lg:p-4 text-center">Mes 2</th>
+                                <th class="p-3 lg:p-4 text-center">Mes 3</th>
+                                <th class="p-3 lg:p-4 text-center">Encuesta Salida</th>
+                                <th class="p-3 lg:p-4 text-center">Finiquito</th>
+                                <th class="p-3 lg:p-4 text-center">Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody id="evaluaciones-table" class="divide-y divide-gray-100 text-sm"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- MOVIMIENTOS -->
+        <div id="movimientos" class="tab-content">
+            <div class="mb-4 lg:mb-6">
+                <h2 class="text-xl lg:text-2xl font-bold text-gray-800">Ingresos y Bajas</h2>
+                <p class="text-sm text-gray-500 mt-1">Historial de movimientos de personal</p>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6 mb-6">
+                <div class="bg-white p-4 lg:p-5 rounded-xl shadow-sm border border-gray-100">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="font-bold text-gray-800 text-sm lg:text-base flex items-center"><i class="fa-solid fa-user-plus text-emerald-600 mr-2"></i>Últimos Ingresos</h3>
+                        <span class="text-xs bg-emerald-100 text-emerald-700 px-2 py-1 rounded-full font-bold" id="ingresos-count">0</span>
+                    </div>
+                    <div class="space-y-2 max-h-96 overflow-y-auto" id="ingresos-list"></div>
+                </div>
+
+                <div class="bg-white p-4 lg:p-5 rounded-xl shadow-sm border border-gray-100">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="font-bold text-gray-800 text-sm lg:text-base flex items-center"><i class="fa-solid fa-user-minus text-red-600 mr-2"></i>Últimas Bajas</h3>
+                        <span class="text-xs bg-red-100 text-red-700 px-2 py-1 rounded-full font-bold" id="bajas-count">0</span>
+                    </div>
+                    <div class="space-y-2 max-h-96 overflow-y-auto" id="bajas-list"></div>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                <div class="p-4 lg:p-5 border-b">
+                    <h3 class="font-bold text-gray-800 text-sm lg:text-base">Historial Completo de Movimientos</h3>
+                </div>
+                <div class="table-wrapper">
+                    <table class="w-full text-left border-collapse min-w-[700px]">
+                        <thead>
+                            <tr class="bg-gray-50 text-gray-600 text-xs uppercase tracking-wider border-b">
+                                <th class="p-3 lg:p-4">Fecha</th>
+                                <th class="p-3 lg:p-4">Tipo</th>
+                                <th class="p-3 lg:p-4">Colaborador</th>
+                                <th class="p-3 lg:p-4">Puesto</th>
+                                <th class="p-3 lg:p-4">Detalle</th>
+                            </tr>
+                        </thead>
+                        <tbody id="movimientos-table" class="divide-y divide-gray-100 text-sm"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- EXPEDIENTE -->
+        <div id="expediente" class="tab-content">
+            <div class="mb-4 lg:mb-6">
+                <h2 class="text-xl lg:text-2xl font-bold text-gray-800">Expediente del Colaborador</h2>
+                <p class="text-sm text-gray-500 mt-1">Búsqueda y ficha integral</p>
+            </div>
+
+            <div class="bg-white p-4 lg:p-6 rounded-xl shadow-sm border border-gray-100 mb-6">
+                <div class="relative">
+                    <i class="fa-solid fa-search absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"></i>
+                    <input type="text" id="search-expediente" oninput="buscarExpediente()" placeholder="Buscar por nombre o número de empleado..." class="w-full border rounded-lg p-3 pl-11 text-sm outline-none touch-target">
+                </div>
+                <div id="expediente-results" class="mt-3 space-y-1 max-h-60 overflow-y-auto"></div>
+            </div>
+
+            <div id="expediente-ficha" class="hidden">
+                <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden mb-6">
+                    <div class="bg-gradient-to-r from-emerald-600 to-emerald-700 p-6 text-white">
+                        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                            <div>
+                                <h3 class="text-2xl font-bold" id="exp-nombre">--</h3>
+                                <p class="text-emerald-100" id="exp-puesto">--</p>
+                            </div>
+                            <div class="text-right">
+                                <p class="text-sm text-emerald-100">No. Empleado</p>
+                                <p class="text-xl font-bold" id="exp-id">--</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="p-6">
+                        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                            <div>
+                                <p class="text-xs text-gray-500 uppercase font-bold">Área</p>
+                                <p class="font-bold text-gray-800" id="exp-area">--</p>
+                            </div>
+                            <div>
+                                <p class="text-xs text-gray-500 uppercase font-bold">Planta</p>
+                                <p class="font-bold text-gray-800" id="exp-planta">--</p>
+                            </div>
+                            <div>
+                                <p class="text-xs text-gray-500 uppercase font-bold">F. Ingreso</p>
+                                <p class="font-bold text-gray-800" id="exp-ingreso">--</p>
+                            </div>
+                            <div>
+                                <p class="text-xs text-gray-500 uppercase font-bold">Antigüedad</p>
+                                <p class="font-bold text-gray-800" id="exp-antiguedad">--</p>
+                            </div>
+                            <div>
+                                <p class="text-xs text-gray-500 uppercase font-bold">Estatus</p>
+                                <p id="exp-estatus">--</p>
+                            </div>
+                            <div>
+                                <p class="text-xs text-gray-500 uppercase font-bold">Jefe Inmediato</p>
+                                <p class="font-bold text-gray-800" id="exp-jefe">--</p>
+                            </div>
+                            <div>
+                                <p class="text-xs text-gray-500 uppercase font-bold">Edad</p>
+                                <p class="font-bold text-gray-800" id="exp-edad">--</p>
+                            </div>
+                            <div>
+                                <p class="text-xs text-gray-500 uppercase font-bold">NSS</p>
+                                <p class="font-bold text-gray-800 font-mono text-xs" id="exp-nss">--</p>
+                            </div>
+                        </div>
+
+                        <div class="border-t pt-6">
+                            <h4 class="font-bold text-gray-800 mb-3 flex items-center"><i class="fa-solid fa-file-signature text-emerald-600 mr-2"></i>Contrato Actual</h4>
+                            <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 bg-gray-50 p-4 rounded-lg">
+                                <div>
+                                    <p class="text-xs text-gray-500">Tipo</p>
+                                    <p class="font-bold" id="exp-contrato-tipo">--</p>
+                                </div>
+                                <div>
+                                    <p class="text-xs text-gray-500">Inicio</p>
+                                    <p class="font-bold" id="exp-contrato-inicio">--</p>
+                                </div>
+                                <div>
+                                    <p class="text-xs text-gray-500">Vencimiento</p>
+                                    <p class="font-bold" id="exp-contrato-fin">--</p>
+                                </div>
+                                <div>
+                                    <p class="text-xs text-gray-500">Estatus</p>
+                                    <p id="exp-contrato-estatus">--</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="border-t pt-6">
+                            <h4 class="font-bold text-gray-800 mb-3 flex items-center"><i class="fa-solid fa-umbrella-beach text-emerald-600 mr-2"></i>Vacaciones</h4>
+                            <div class="grid grid-cols-3 gap-4 bg-gray-50 p-4 rounded-lg">
+                                <div>
+                                    <p class="text-xs text-gray-500">Correspondientes</p>
+                                    <p class="font-bold text-lg" id="exp-vac-corr">--</p>
+                                </div>
+                                <div>
+                                    <p class="text-xs text-gray-500">Utilizadas</p>
+                                    <p class="font-bold text-lg text-amber-600" id="exp-vac-usadas">--</p>
+                                </div>
+                                <div>
+                                    <p class="text-xs text-gray-500">Disponibles</p>
+                                    <p class="font-bold text-lg text-emerald-600" id="exp-vac-disp">--</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="border-t pt-6">
+                            <h4 class="font-bold text-gray-800 mb-3 flex items-center"><i class="fa-solid fa-clipboard-check text-purple-600 mr-2"></i>Evaluaciones</h4>
+                            <div id="exp-evaluaciones" class="bg-gray-50 p-4 rounded-lg space-y-2"></div>
+                        </div>
+
+                        <div class="border-t pt-6">
+                            <h4 class="font-bold text-gray-800 mb-3 flex items-center"><i class="fa-solid fa-clock-rotate-left text-emerald-600 mr-2"></i>Historial Integral</h4>
+                            <div class="space-y-2" id="exp-historial"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- REPORTES -->
+        <div id="reportes" class="tab-content">
+            <div class="mb-4 lg:mb-6">
+                <h2 class="text-xl lg:text-2xl font-bold text-gray-800">Reportes y Filtros</h2>
+                <p class="text-sm text-gray-500 mt-1">Exporta información para Excel</p>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
+                <div class="bg-white p-4 lg:p-6 rounded-xl shadow-sm border border-gray-100">
+                    <h3 class="font-bold text-gray-800 mb-4 flex items-center"><i class="fa-solid fa-user-check text-emerald-600 mr-2"></i>Personal</h3>
+                    <div class="space-y-2">
+                        <button onclick="exportarReporte('activos')" class="w-full bg-emerald-50 hover:bg-emerald-100 text-emerald-700 px-4 py-3 rounded-lg text-sm font-medium transition flex items-center justify-between touch-target">
+                            <span><i class="fa-solid fa-download mr-2"></i>Personal Activo</span>
+                            <span class="text-xs bg-emerald-200 px-2 py-1 rounded-full" id="rep-activos">0</span>
+                        </button>
+                        <button onclick="exportarReporte('bajas')" class="w-full bg-red-50 hover:bg-red-100 text-red-700 px-4 py-3 rounded-lg text-sm font-medium transition flex items-center justify-between touch-target">
+                            <span><i class="fa-solid fa-download mr-2"></i>Personal de Baja</span>
+                            <span class="text-xs bg-red-200 px-2 py-1 rounded-full" id="rep-bajas">0</span>
+                        </button>
+                        <button onclick="exportarReporte('planta')" class="w-full bg-blue-50 hover:bg-blue-100 text-blue-700 px-4 py-3 rounded-lg text-sm font-medium transition flex items-center justify-between touch-target">
+                            <span><i class="fa-solid fa-download mr-2"></i>Personal de Planta</span>
+                            <span class="text-xs bg-blue-200 px-2 py-1 rounded-full" id="rep-planta">0</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="bg-white p-4 lg:p-6 rounded-xl shadow-sm border border-gray-100">
+                    <h3 class="font-bold text-gray-800 mb-4 flex items-center"><i class="fa-solid fa-file-signature text-emerald-600 mr-2"></i>Contratos</h3>
+                    <div class="space-y-2">
+                        <button onclick="exportarReporte('contratos-proximos')" class="w-full bg-amber-50 hover:bg-amber-100 text-amber-700 px-4 py-3 rounded-lg text-sm font-medium transition flex items-center justify-between touch-target">
+                            <span><i class="fa-solid fa-download mr-2"></i>Contratos Próximos a Vencer</span>
+                            <span class="text-xs bg-amber-200 px-2 py-1 rounded-full" id="rep-proximos">0</span>
+                        </button>
+                        <button onclick="exportarReporte('contratos-todos')" class="w-full bg-purple-50 hover:bg-purple-100 text-purple-700 px-4 py-3 rounded-lg text-sm font-medium transition flex items-center justify-between touch-target">
+                            <span><i class="fa-solid fa-download mr-2"></i>Historial de Contratos</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="bg-white p-4 lg:p-6 rounded-xl shadow-sm border border-gray-100">
+                    <h3 class="font-bold text-gray-800 mb-4 flex items-center"><i class="fa-solid fa-arrow-right-arrow-left text-emerald-600 mr-2"></i>Movimientos</h3>
+                    <div class="space-y-2">
+                        <button onclick="exportarReporte('ingresos')" class="w-full bg-emerald-50 hover:bg-emerald-100 text-emerald-700 px-4 py-3 rounded-lg text-sm font-medium transition flex items-center justify-between touch-target">
+                            <span><i class="fa-solid fa-download mr-2"></i>Ingresos por Periodo</span>
+                        </button>
+                        <button onclick="exportarReporte('bajas-mov')" class="w-full bg-red-50 hover:bg-red-100 text-red-700 px-4 py-3 rounded-lg text-sm font-medium transition flex items-center justify-between touch-target">
+                            <span><i class="fa-solid fa-download mr-2"></i>Bajas por Periodo</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="bg-white p-4 lg:p-6 rounded-xl shadow-sm border border-gray-100">
+                    <h3 class="font-bold text-gray-800 mb-4 flex items-center"><i class="fa-solid fa-clipboard-check text-purple-600 mr-2"></i>Evaluaciones</h3>
+                    <div class="space-y-2">
+                        <button onclick="exportarReporte('evaluaciones')" class="w-full bg-purple-50 hover:bg-purple-100 text-purple-700 px-4 py-3 rounded-lg text-sm font-medium transition flex items-center justify-between touch-target">
+                            <span><i class="fa-solid fa-download mr-2"></i>Evaluaciones Completas</span>
+                        </button>
+                        <button onclick="exportarReporte('finiquitos')" class="w-full bg-cyan-50 hover:bg-cyan-100 text-cyan-700 px-4 py-3 rounded-lg text-sm font-medium transition flex items-center justify-between touch-target">
+                            <span><i class="fa-solid fa-download mr-2"></i>Finiquitos Entregados</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="bg-white p-4 lg:p-6 rounded-xl shadow-sm border border-gray-100 lg:col-span-2">
+                    <h3 class="font-bold text-gray-800 mb-4 flex items-center"><i class="fa-solid fa-umbrella-beach text-emerald-600 mr-2"></i>Vacaciones</h3>
+                    <div class="space-y-2">
+                        <button onclick="exportarReporte('vacaciones')" class="w-full bg-cyan-50 hover:bg-cyan-100 text-cyan-700 px-4 py-3 rounded-lg text-sm font-medium transition flex items-center justify-between touch-target">
+                            <span><i class="fa-solid fa-download mr-2"></i>Vacaciones Disponibles/Utilizadas</span>
+                        </button>
+                        <button onclick="exportarReporte('general')" class="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-3 rounded-lg text-sm font-medium transition flex items-center justify-between touch-target">
+                            <span><i class="fa-solid fa-download mr-2"></i>Información General Completa</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-6 bg-white p-4 lg:p-6 rounded-xl shadow-sm border border-gray-100">
+                <h3 class="font-bold text-gray-800 mb-4">Filtros Avanzados</h3>
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+                    <select id="rep-filter-planta" class="border rounded-lg p-2.5 text-sm outline-none touch-target">
+                        <option value="all">Todas las plantas</option>
+                    </select>
+                    <select id="rep-filter-area" class="border rounded-lg p-2.5 text-sm outline-none touch-target">
+                        <option value="all">Todas las áreas</option>
+                    </select>
+                    <input type="date" id="rep-filter-fecha" class="border rounded-lg p-2.5 text-sm outline-none touch-target">
+                </div>
+                <button onclick="exportarReporteFiltrado()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2.5 rounded-lg font-medium transition touch-target">
+                    <i class="fa-solid fa-filter mr-2"></i>Exportar con Filtros
+                </button>
+            </div>
+        </div>
+
+        </div>
+    </main>
+
+    <!-- Modal Nuevo Colaborador -->
+    <div id="colab-modal" class="hidden fixed inset-0 z-40 bg-gray-900/60 flex justify-center items-end lg:items-center p-0 lg:p-4 no-print">
+        <div class="bg-white w-full lg:max-w-3xl rounded-t-2xl lg:rounded-xl shadow-2xl max-h-[95vh] overflow-y-auto">
+            <div class="p-5 border-b flex items-center justify-between sticky top-0 bg-white rounded-t-2xl z-10">
+                <h3 class="font-bold text-gray-800 text-lg" id="colab-modal-title">Nuevo Colaborador</h3>
+                <button onclick="closeColabModal()" class="text-gray-400 hover:text-gray-800 touch-target w-10 h-10 flex items-center justify-center"><i class="fa-solid fa-xmark text-xl"></i></button>
+            </div>
+            <div class="p-5 space-y-4">
+                <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                    <div>
+                        <label class="block text-xs text-gray-500 mb-1 font-medium">No. Empleado *</label>
+                        <input type="text" id="col-id" class="w-full border rounded-lg p-2.5 text-sm outline-none touch-target" placeholder="EMP-001">
+                    </div>
+                    <div class="col-span-2 lg:col-span-3">
+                        <label class="block text-xs text-gray-500 mb-1 font-medium">Nombre Completo *</label>
+                        <input type="text" id="col-nombre" class="w-full border rounded-lg p-2.5 text-sm outline-none touch-target" placeholder="Nombre completo">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                    <div>
+                        <label class="block text-xs text-gray-500 mb-1 font-medium">Fecha Nacimiento</label>
+                        <input type="date" id="col-nacimiento" class="w-full border rounded-lg p-2.5 text-sm outline-none touch-target">
+                    </div>
+                    <div>
+                        <label class="block text-xs text-gray-500 mb-1 font-medium">CURP</label>
+                        <input type="text" id="col-curp" class="w-full border rounded-lg p-2.5 text-sm outline-none touch-target" placeholder="18 caracteres">
+                    </div>
+                    <div>
+                        <label class="block text-xs text-gray-500 mb-1 font-medium">RFC</label>
+                        <input type="text" id="col-rfc" class="w-full border rounded-lg p-2.5 text-sm outline-none touch-target">
+                    </div>
+                    <div>
+                        <label class="block text-xs text-gray-500 mb-1 font-medium">NSS</label>
+                        <input type="text" id="col-nss" class="w-full border rounded-lg p-2.5 text-sm outline-none touch-target">
+                    </div>
+                </div>
+                <div class="border-t pt-4">
+                    <h4 class="font-bold text-gray-700 mb-3 text-sm">Datos Operativos</h4>
+                    <div class="grid grid-cols-2 lg:grid-cols-3 gap-3">
+                        <div>
+                            <label class="block text-xs text-gray-500 mb-1 font-medium">Puesto *</label>
+                            <input type="text" id="col-puesto" class="w-full border rounded-lg p-2.5 text-sm outline-none touch-target">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-gray-500 mb-1 font-medium">Departamento / Área *</label>
+                            <input type="text" id="col-departamento" class="w-full border rounded-lg p-2.5 text-sm outline-none touch-target">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-gray-500 mb-1 font-medium">Planta *</label>
+                            <input type="text" id="col-planta" class="w-full border rounded-lg p-2.5 text-sm outline-none touch-target">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-gray-500 mb-1 font-medium">Jefe Inmediato</label>
+                            <input type="text" id="col-jefe" class="w-full border rounded-lg p-2.5 text-sm outline-none touch-target">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-gray-500 mb-1 font-medium">Fecha de Ingreso *</label>
+                            <input type="date" id="col-ingreso" class="w-full border rounded-lg p-2.5 text-sm outline-none touch-target">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-gray-500 mb-1 font-medium">Tipo de Contrato</label>
+                            <select id="col-tipo-contrato" class="w-full border rounded-lg p-2.5 text-sm outline-none touch-target">
+                                <option value="Temporal">Temporal</option>
+                                <option value="Indefinido">Indefinido</option>
+                                <option value="Planta">Planta</option>
+                                <option value="Prácticas">Prácticas</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div class="border-t pt-4">
+                    <h4 class="font-bold text-gray-700 mb-3 text-sm">Contrato (opcional, se puede agregar después)</h4>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs text-gray-500 mb-1 font-medium">Inicio Contrato</label>
+                            <input type="date" id="col-contrato-inicio" class="w-full border rounded-lg p-2.5 text-sm outline-none touch-target">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-gray-500 mb-1 font-medium">Fin Contrato</label>
+                            <input type="date" id="col-contrato-fin" class="w-full border rounded-lg p-2.5 text-sm outline-none touch-target">
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="p-5 border-t bg-gray-50 rounded-b-xl flex justify-end space-x-2 sticky bottom-0">
+                <button onclick="closeColabModal()" class="px-4 py-2.5 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-200 transition touch-target">Cancelar</button>
+                <button onclick="saveColaborador()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-lg text-sm font-medium transition touch-target">Guardar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Nuevo Contrato -->
+    <div id="contrato-modal" class="hidden fixed inset-0 z-40 bg-gray-900/60 flex justify-center items-end lg:items-center p-0 lg:p-4 no-print">
+        <div class="bg-white w-full lg:max-w-lg rounded-t-2xl lg:rounded-xl shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div class="p-5 border-b flex items-center justify-between sticky top-0 bg-white rounded-t-2xl">
+                <h3 class="font-bold text-gray-800 text-lg">Nuevo / Renovar Contrato</h3>
+                <button onclick="closeContratoModal()" class="text-gray-400 hover:text-gray-800 touch-target w-10 h-10 flex items-center justify-center"><i class="fa-solid fa-xmark text-xl"></i></button>
+            </div>
+            <div class="p-5 space-y-4">
+                <div>
+                    <label class="block text-xs text-gray-500 mb-1 font-medium">Colaborador *</label>
+                    <select id="cont-colaborador" class="w-full border rounded-lg p-2.5 text-sm outline-none touch-target"></select>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs text-gray-500 mb-1 font-medium">Tipo de Contrato *</label>
+                        <select id="cont-tipo" class="w-full border rounded-lg p-2.5 text-sm outline-none touch-target">
+                            <option value="Temporal">Temporal</option>
+                            <option value="Indefinido">Indefinido</option>
+                            <option value="Planta">Planta</option>
+                            <option value="Prácticas">Prácticas</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs text-gray-500 mb-1 font-medium">Decisión Final</label>
+                        <select id="cont-decision" class="w-full border rounded-lg p-2.5 text-sm outline-none touch-target">
+                            <option value="Nuevo">Nuevo</option>
+                            <option value="Renovación">Renovación</option>
+                            <option value="Contrato de Planta">Contrato de Planta</option>
+                            <option value="Baja">Baja</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs text-gray-500 mb-1 font-medium">Fecha Inicio *</label>
+                        <input type="date" id="cont-inicio" class="w-full border rounded-lg p-2.5 text-sm outline-none touch-target">
+                    </div>
+                    <div>
+                        <label class="block text-xs text-gray-500 mb-1 font-medium">Fecha Vencimiento *</label>
+                        <input type="date" id="cont-fin" class="w-full border rounded-lg p-2.5 text-sm outline-none touch-target">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-500 mb-1 font-medium">Observaciones</label>
+                    <textarea id="cont-obs" rows="3" class="w-full border rounded-lg p-2.5 text-sm outline-none touch-target"></textarea>
+                </div>
+            </div>
+            <div class="p-5 border-t bg-gray-50 rounded-b-xl flex justify-end space-x-2 sticky bottom-0">
+                <button onclick="closeContratoModal()" class="px-4 py-2.5 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-200 transition touch-target">Cancelar</button>
+                <button onclick="saveContrato()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-lg text-sm font-medium transition touch-target">Guardar Contrato</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Nueva Vacación -->
+    <div id="vacacion-modal" class="hidden fixed inset-0 z-40 bg-gray-900/60 flex justify-center items-end lg:items-center p-0 lg:p-4 no-print">
+        <div class="bg-white w-full lg:max-w-lg rounded-t-2xl lg:rounded-xl shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div class="p-5 border-b flex items-center justify-between sticky top-0 bg-white rounded-t-2xl">
+                <h3 class="font-bold text-gray-800 text-lg">Registrar Vacaciones</h3>
+                <button onclick="closeVacacionModal()" class="text-gray-400 hover:text-gray-800 touch-target w-10 h-10 flex items-center justify-center"><i class="fa-solid fa-xmark text-xl"></i></button>
+            </div>
+            <div class="p-5 space-y-4">
+                <div>
+                    <label class="block text-xs text-gray-500 mb-1 font-medium">Colaborador *</label>
+                    <select id="vac-colaborador" onchange="updateVacacionInfo()" class="w-full border rounded-lg p-2.5 text-sm outline-none touch-target"></select>
+                </div>
+                <div id="vac-info" class="bg-emerald-50 p-3 rounded-lg text-sm hidden">
+                    <p class="text-xs text-gray-600">Días disponibles: <strong id="vac-disp-info" class="text-emerald-700">0</strong></p>
+                </div>
+                <div class="grid grid-cols-3 gap-3">
+                    <div>
+                        <label class="block text-xs text-gray-500 mb-1 font-medium">Fecha Inicial *</label>
+                        <input type="date" id="vac-inicio" class="w-full border rounded-lg p-2.5 text-sm outline-none touch-target">
+                    </div>
+                    <div>
+                        <label class="block text-xs text-gray-500 mb-1 font-medium">Fecha Final *</label>
+                        <input type="date" id="vac-fin" class="w-full border rounded-lg p-2.5 text-sm outline-none touch-target">
+                    </div>
+                    <div>
+                        <label class="block text-xs text-gray-500 mb-1 font-medium">Días *</label>
+                        <input type="number" id="vac-dias" min="1" class="w-full border rounded-lg p-2.5 text-sm outline-none touch-target">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-500 mb-1 font-medium">Estatus de Solicitud</label>
+                    <select id="vac-estatus" class="w-full border rounded-lg p-2.5 text-sm outline-none touch-target">
+                        <option value="Aprobado">Aprobado</option>
+                        <option value="Pendiente">Pendiente</option>
+                        <option value="Cancelado">Cancelado</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-500 mb-1 font-medium">Observaciones</label>
+                    <textarea id="vac-obs" rows="3" class="w-full border rounded-lg p-2.5 text-sm outline-none touch-target"></textarea>
+                </div>
+            </div>
+            <div class="p-5 border-t bg-gray-50 rounded-b-xl flex justify-end space-x-2 sticky bottom-0">
+                <button onclick="closeVacacionModal()" class="px-4 py-2.5 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-200 transition touch-target">Cancelar</button>
+                <button onclick="saveVacacion()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-lg text-sm font-medium transition touch-target">Registrar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Nueva Evaluación -->
+    <div id="evaluacion-modal" class="hidden fixed inset-0 z-40 bg-gray-900/60 flex justify-center items-end lg:items-center p-0 lg:p-4 no-print">
+        <div class="bg-white w-full lg:max-w-lg rounded-t-2xl lg:rounded-xl shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div class="p-5 border-b flex items-center justify-between sticky top-0 bg-white rounded-t-2xl">
+                <h3 class="font-bold text-gray-800 text-lg">Registrar Evaluación</h3>
+                <button onclick="closeEvaluacionModal()" class="text-gray-400 hover:text-gray-800 touch-target w-10 h-10 flex items-center justify-center"><i class="fa-solid fa-xmark text-xl"></i></button>
+            </div>
+            <div class="p-5 space-y-4">
+                <div>
+                    <label class="block text-xs text-gray-500 mb-1 font-medium">Colaborador *</label>
+                    <select id="eval-colaborador" class="w-full border rounded-lg p-2.5 text-sm outline-none touch-target"></select>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs text-gray-500 mb-1 font-medium">Tipo de Evaluación *</label>
+                        <select id="eval-tipo" onchange="updateEvaluacionTipo()" class="w-full border rounded-lg p-2.5 text-sm outline-none touch-target">
+                            <option value="Onboarding">Onboarding</option>
+                            <option value="Mes 1">Mes 1</option>
+                            <option value="Mes 2">Mes 2</option>
+                            <option value="Mes 3">Mes 3</option>
+                            <option value="Salida">Encuesta de Salida</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs text-gray-500 mb-1 font-medium">Fecha de Aplicación *</label>
+                        <input type="date" id="eval-fecha" class="w-full border rounded-lg p-2.5 text-sm outline-none touch-target">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-500 mb-1 font-medium">Resultado / Calificación</label>
+                    <select id="eval-resultado" class="w-full border rounded-lg p-2.5 text-sm outline-none touch-target">
+                        <option value="Excelente">Excelente</option>
+                        <option value="Satisfactorio">Satisfactorio</option>
+                        <option value="Regular">Regular</option>
+                        <option value="No satisfactorio">No satisfactorio</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-500 mb-1 font-medium">Observaciones</label>
+                    <textarea id="eval-obs" rows="3" class="w-full border rounded-lg p-2.5 text-sm outline-none touch-target" placeholder="Comentarios sobre la evaluación..."></textarea>
+                </div>
+                <div id="eval-finiquito-section" class="hidden border-t pt-4">
+                    <h4 class="font-bold text-gray-700 mb-3 text-sm">Finiquito</h4>
+                    <div class="space-y-3">
+                        <div class="flex items-center space-x-2">
+                            <input type="checkbox" id="eval-finiquito-check" class="w-4 h-4 text-emerald-600 rounded">
+                            <label for="eval-finiquito-check" class="text-sm font-medium text-gray-700">Finiquito entregado</label>
+                        </div>
+                        <div>
+                            <label class="block text-xs text-gray-500 mb-1 font-medium">Fecha de entrega</label>
+                            <input type="date" id="eval-finiquito-fecha" class="w-full border rounded-lg p-2.5 text-sm outline-none touch-target">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-gray-500 mb-1 font-medium">Observaciones del finiquito</label>
+                            <textarea id="eval-finiquito-obs" rows="2" class="w-full border rounded-lg p-2.5 text-sm outline-none touch-target"></textarea>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="p-5 border-t bg-gray-50 rounded-b-xl flex justify-end space-x-2 sticky bottom-0">
+                <button onclick="closeEvaluacionModal()" class="px-4 py-2.5 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-200 transition touch-target">Cancelar</button>
+                <button onclick="saveEvaluacion()" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2.5 rounded-lg text-sm font-medium transition touch-target">Guardar Evaluación</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Dar de Baja -->
+    <div id="baja-modal" class="hidden fixed inset-0 z-40 bg-gray-900/60 flex justify-center items-center p-4 no-print">
+        <div class="bg-white w-full max-w-md rounded-xl shadow-2xl">
+            <div class="p-5 border-b flex items-center justify-between">
+                <h3 class="font-bold text-gray-800 text-lg">Dar de Baja</h3>
+                <button onclick="closeBajaModal()" class="text-gray-400 hover:text-gray-800"><i class="fa-solid fa-xmark text-xl"></i></button>
+            </div>
+            <div class="p-5 space-y-4">
+                <p class="text-sm text-gray-600">Colaborador: <strong id="baja-nombre"></strong></p>
+                <div>
+                    <label class="block text-xs text-gray-500 mb-1 font-medium">Fecha de Baja *</label>
+                    <input type="date" id="baja-fecha" class="w-full border rounded-lg p-2.5 text-sm outline-none touch-target">
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-500 mb-1 font-medium">Tipo de Baja *</label>
+                    <select id="baja-tipo" class="w-full border rounded-lg p-2.5 text-sm outline-none touch-target">
+                        <option value="Renuncia">Renuncia</option>
+                        <option value="Abandono">Abandono de empleo</option>
+                        <option value="Término de contrato">Término de contrato</option>
+                        <option value="Despido">Despido</option>
+                        <option value="Jubilación">Jubilación</option>
+                        <option value="Otro">Otro</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-500 mb-1 font-medium">Motivo</label>
+                    <textarea id="baja-motivo" rows="3" class="w-full border rounded-lg p-2.5 text-sm outline-none touch-target"></textarea>
+                </div>
+            </div>
+            <div class="p-5 border-t bg-gray-50 rounded-b-xl flex justify-end space-x-2">
+                <button onclick="closeBajaModal()" class="px-4 py-2.5 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-200 transition touch-target">Cancelar</button>
+                <button onclick="confirmarBaja()" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2.5 rounded-lg text-sm font-medium transition touch-target">Confirmar Baja</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Historial Vacaciones -->
+    <div id="hist-vac-modal" class="hidden fixed inset-0 z-40 bg-gray-900/60 flex justify-center items-end lg:items-center p-0 lg:p-4 no-print">
+        <div class="bg-white w-full lg:max-w-2xl rounded-t-2xl lg:rounded-xl shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div class="p-5 border-b flex items-center justify-between sticky top-0 bg-white rounded-t-2xl">
+                <h3 class="font-bold text-gray-800 text-lg">Historial de Vacaciones</h3>
+                <button onclick="document.getElementById('hist-vac-modal').classList.add('hidden')" class="text-gray-400 hover:text-gray-800 touch-target w-10 h-10 flex items-center justify-center"><i class="fa-solid fa-xmark text-xl"></i></button>
+            </div>
+            <div id="hist-vac-content" class="p-5"></div>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toast-container" class="fixed top-4 right-4 z-[100] space-y-2 pointer-events-none"></div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyDLbFKnGOTvEFlARa4rUrWzBhIixxoR8yw",
+            authDomain: "almacen-eg0.firebaseapp.com",
+            projectId: "almacen-eg0",
+            storageBucket: "almacen-eg0.firebasestorage.app",
+            messagingSenderId: "1085567174038",
+            appId: "1:1085567174038:web:f0fa9dd4a3542ba70649b7",
+            measurementId: "G-D1JW0F7NEN"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+        signInAnonymously(auth).catch(e => console.error(e));
+
+        let state = { colaboradores: [], config: { nextId: 1 } };
+        let editingId = null;
+        let bajaId = null;
+        let plantaChart = null, contratoChart = null;
+
+        // ============ FIREBASE ============
+        function setupRealtime() {
+            onSnapshot(doc(db, "rh", "datos"), (snap) => {
+                if (snap.exists()) {
+                    const data = snap.data();
+                    state = { colaboradores: data.colaboradores || [], config: data.config || { nextId: 1 } };
+                    updateSyncStatus('online');
+                    refreshAll();
+                } else {
+                    setDoc(doc(db, "rh", "datos"), state).then(() => {
+                        updateSyncStatus('online');
+                        refreshAll();
+                    });
+                }
+            }, () => updateSyncStatus('offline'));
+        }
+
+        async function saveState() {
+            try {
+                updateSyncStatus('syncing');
+                await setDoc(doc(db, "rh", "datos"), state);
+                updateSyncStatus('online');
+            } catch(e) {
+                console.error(e);
+                updateSyncStatus('offline');
+                toast("Error al guardar", "error");
+            }
+        }
+
+        function updateSyncStatus(status) {
+            ['sync-indicator','sync-indicator-mobile','sync-indicator-header'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) {
+                    el.className = 'sync-status';
+                    el.classList.add(status === 'online' ? 'sync-online' : status === 'syncing' ? 'sync-syncing' : 'sync-offline');
+                }
+            });
+            ['sync-text','sync-text-mobile'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.innerText = status === 'online' ? 'Sincronizado' : status === 'syncing' ? 'Guardando...' : 'Sin conexión';
+            });
+        }
+
+        // ============ UTILIDADES ============
+        function calcularEdad(fechaNac) {
+            if (!fechaNac) return 0;
+            const hoy = new Date();
+            const nac = new Date(fechaNac);
+            let edad = hoy.getFullYear() - nac.getFullYear();
+            const m = hoy.getMonth() - nac.getMonth();
+            if (m < 0 || (m === 0 && hoy.getDate() < nac.getDate())) edad--;
+            return edad;
+        }
+
+        function calcularAntiguedad(fechaIngreso) {
+            if (!fechaIngreso) return { años: 0, meses: 0, dias: 0, texto: '0 años' };
+            const hoy = new Date();
+            const ing = new Date(fechaIngreso);
+            let años = hoy.getFullYear() - ing.getFullYear();
+            let meses = hoy.getMonth() - ing.getMonth();
+            let dias = hoy.getDate() - ing.getDate();
+            if (dias < 0) { meses--; dias += 30; }
+            if (meses < 0) { años--; meses += 12; }
+            const texto = años > 0 ? `${años} año${años>1?'s':''} ${meses} mes${meses!==1?'es':''}` : `${meses} mes${meses!==1?'es':''}`;
+            return { años, meses, dias, texto };
+        }
+
+        function diasEntreFechas(f1, f2) {
+            const d1 = new Date(f1);
+            const d2 = new Date(f2);
+            return Math.ceil((d2 - d1) / (1000 * 60 * 60 * 24));
+        }
+
+        function calcularDiasVacaciones(antiguedadAnios) {
+            if (antiguedadAnios < 1) return 12;
+            if (antiguedadAnios === 1) return 12;
+            if (antiguedadAnios === 2) return 14;
+            if (antiguedadAnios === 3) return 16;
+            if (antiguedadAnios === 4) return 18;
+            if (antiguedadAnios === 5) return 20;
+            if (antiguedadAnios >= 6 && antiguedadAnios <= 10) return 22;
+            if (antiguedadAnios >= 11 && antiguedadAnios <= 15) return 24;
+            if (antiguedadAnios >= 16 && antiguedadAnios <= 20) return 26;
+            if (antiguedadAnios >= 21 && antiguedadAnios <= 25) return 28;
+            if (antiguedadAnios >= 26 && antiguedadAnios <= 30) return 30;
+            return 32;
+        }
+
+        function getContratoActual(col) {
+            if (!col.contratos || col.contratos.length === 0) return null;
+            return col.contratos[col.contratos.length - 1];
+        }
+
+        function getEstatusContrato(col) {
+            const cont = getContratoActual(col);
+            if (!cont) return { estatus: 'Sin contrato', dias: 0, clase: 'status-baja' };
+            if (cont.tipo === 'Indefinido' || cont.tipo === 'Planta') return { estatus: 'Vigente', dias: 9999, clase: 'status-vigente' };
+            const hoy = new Date();
+            const fin = new Date(cont.fin);
+            const dias = diasEntreFechas(hoy.toISOString().split('T')[0], cont.fin);
+            if (dias < 0) return { estatus: 'Vencido', dias, clase: 'status-vencido' };
+            if (dias <= 30) return { estatus: 'Próximo a vencer', dias, clase: 'status-proximo' };
+            return { estatus: 'Vigente', dias, clase: 'status-vigente' };
+        }
+
+        function getVacaciones(col) {
+            const ant = calcularAntiguedad(col.fechaIngreso);
+            const corresp = calcularDiasVacaciones(ant.años);
+            const disfrutados = (col.vacaciones || []).filter(v => v.estatus === 'Aprobado').reduce((s, v) => s + (v.dias || 0), 0);
+            return { corresp, disfrutados, disponibles: Math.max(0, corresp - disfrutados) };
+        }
+
+        function getEvaluacionesPendientes(col) {
+            const evaluaciones = col.evaluaciones || {};
+            const antiguedad = calcularAntiguedad(col.fechaIngreso);
+            const mesesDesdeIngreso = antiguedad.años * 12 + antiguedad.meses;
+            let pendientes = [];
+            
+            if (!evaluaciones.onboarding || !evaluaciones.onboarding.aplicada) {
+                pendientes.push({ tipo: 'Onboarding', col: col });
+            }
+            if (mesesDesdeIngreso >= 1 && (!evaluaciones.mes1 || !evaluaciones.mes1.aplicada)) {
+                pendientes.push({ tipo: 'Mes 1', col: col });
+            }
+            if (mesesDesdeIngreso >= 2 && (!evaluaciones.mes2 || !evaluaciones.mes2.aplicada)) {
+                pendientes.push({ tipo: 'Mes 2', col: col });
+            }
+            if (mesesDesdeIngreso >= 3 && (!evaluaciones.mes3 || !evaluaciones.mes3.aplicada)) {
+                pendientes.push({ tipo: 'Mes 3', col: col });
+            }
+            if (col.estatus === 'Baja' && (!evaluaciones.salida || !evaluaciones.salida.aplicada)) {
+                pendientes.push({ tipo: 'Encuesta de Salida', col: col });
+            }
+            return pendientes;
+        }
+
+        function formatDate(f) {
+            if (!f) return '--';
+            const d = new Date(f + 'T00:00:00');
+            return d.toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' });
+        }
+
+        // ============ UI ============
+        window.toggleSidebar = function() {
+            document.getElementById('sidebar-mobile').classList.toggle('open');
+            document.getElementById('sidebar-overlay').classList.toggle('active');
+        }
+
+        window.toast = function(msg, type = 'success') {
+            const container = document.getElementById('toast-container');
+            const colors = { success: 'bg-emerald-600', error: 'bg-red-600', warning: 'bg-amber-500', info: 'bg-blue-600' };
+            const icons = { success: 'fa-circle-check', error: 'fa-circle-xmark', warning: 'fa-triangle-exclamation', info: 'fa-circle-info' };
+            const el = document.createElement('div');
+            el.className = `toast-enter pointer-events-auto ${colors[type]} text-white px-4 py-3 rounded-lg shadow-lg flex items-center space-x-3 min-w-[250px] max-w-[calc(100vw-2rem)]`;
+            el.innerHTML = `<i class="fa-solid ${icons[type]}"></i><span class="text-sm font-medium flex-1">${msg}</span>`;
+            container.appendChild(el);
+            setTimeout(() => { el.classList.remove('toast-enter'); el.classList.add('toast-exit'); setTimeout(() => el.remove(), 300); }, 3000);
+        }
+
+        window.showTab = function(tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.getElementById(tabId).classList.add('active');
+            document.querySelectorAll('.sidebar-btn').forEach(btn => {
+                btn.className = 'sidebar-btn w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-left text-gray-400 hover:bg-gray-800 hover:text-white transition-all';
+            });
+            const btn = document.getElementById('btn-' + tabId);
+            if (btn) btn.className = 'sidebar-btn active w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-left bg-emerald-600 text-white transition-all';
+            if (tabId === 'dashboard') setTimeout(updateCharts, 50);
+            window.scrollTo(0, 0);
+        }
+
+        // ============ DASHBOARD ============
+        function updateDashboard() {
+            const activos = state.colaboradores.filter(c => c.estatus === 'Activo').length;
+            const bajas = state.colaboradores.filter(c => c.estatus === 'Baja').length;
+            let contratosAlerta = 0, totalVacDisp = 0, evaluacionesPendientes = 0;
+            const alertasContratosHtml = [];
+            const alertasEvaluacionesHtml = [];
+
+            state.colaboradores.filter(c => c.estatus === 'Activo').forEach(c => {
+                const est = getEstatusContrato(c);
+                if (est.estatus === 'Próximo a vencer' || est.estatus === 'Vencido') {
+                    contratosAlerta++;
+                    const cont = getContratoActual(c);
+                    alertasContratosHtml.push(`
+                        <tr class="hover:bg-gray-50">
+                            <td class="p-3 lg:p-4 font-medium">${c.nombre}</td>
+                            <td class="p-3 lg:p-4 text-gray-600">${cont.tipo}</td>
+                            <td class="p-3 lg:p-4 text-center">${formatDate(cont.fin)}</td>
+                            <td class="p-3 lg:p-4 text-center font-bold ${est.dias < 0 ? 'text-red-600' : 'text-amber-600'}">${est.dias < 0 ? 0 : est.dias}</td>
+                            <td class="p-3 lg:p-4 text-center"><span class="${est.clase} px-2 py-1 rounded-md text-xs font-bold">${est.estatus}</span></td>
+                        </tr>
+                    `);
+                }
+                const vac = getVacaciones(c);
+                totalVacDisp += vac.disponibles;
+                
+                const pendientes = getEvaluacionesPendientes(c);
+                pendientes.forEach(p => {
+                    evaluacionesPendientes++;
+                    alertasEvaluacionesHtml.push(`
+                        <tr class="hover:bg-gray-50">
+                            <td class="p-3 lg:p-4 font-medium">${p.col.nombre}</td>
+                            <td class="p-3 lg:p-4 text-gray-600">${p.tipo}</td>
+                            <td class="p-3 lg:p-4 text-center">-</td>
+                            <td class="p-3 lg:p-4 text-center"><span class="status-pendiente px-2 py-1 rounded-md text-xs font-bold">Pendiente</span></td>
+                        </tr>
+                    `);
+                });
+            });
+
+            document.getElementById('dash-activos').innerText = activos;
+            document.getElementById('dash-bajas').innerText = bajas;
+            document.getElementById('dash-contratos-alerta').innerText = contratosAlerta;
+            document.getElementById('dash-evaluaciones-pendientes').innerText = evaluacionesPendientes;
+            document.getElementById('alertas-contratos-count').innerText = `${contratosAlerta} alertas`;
+            document.getElementById('alertas-evaluaciones-count').innerText = `${evaluacionesPendientes} alertas`;
+            document.getElementById('alertas-contratos-table').innerHTML = alertasContratosHtml.length ? alertasContratosHtml.join('') : '<tr><td colspan="5" class="p-6 text-center text-gray-500"><i class="fa-solid fa-circle-check text-emerald-500 text-2xl mb-2"></i><br>Sin contratos próximos a vencer</td></tr>';
+            document.getElementById('alertas-evaluaciones-table').innerHTML = alertasEvaluacionesHtml.length ? alertasEvaluacionesHtml.join('') : '<tr><td colspan="4" class="p-6 text-center text-gray-500"><i class="fa-solid fa-circle-check text-purple-500 text-2xl mb-2"></i><br>Sin evaluaciones pendientes</td></tr>';
+
+            const fecha = new Date().toLocaleDateString('es-MX', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+            document.getElementById('dash-date').innerText = fecha.charAt(0).toUpperCase() + fecha.slice(1);
+
+            document.getElementById('rep-activos').innerText = activos;
+            document.getElementById('rep-bajas').innerText = bajas;
+            document.getElementById('rep-planta').innerText = state.colaboradores.filter(c => c.estatus === 'Activo' && getContratoActual(c)?.tipo === 'Planta').length;
+            document.getElementById('rep-proximos').innerText = contratosAlerta;
+        }
+
+        function updateCharts() {
+            const plantas = {};
+            state.colaboradores.filter(c => c.estatus === 'Activo').forEach(c => {
+                const p = c.planta || 'Sin planta';
+                plantas[p] = (plantas[p] || 0) + 1;
+            });
+            const pCtx = document.getElementById('plantaChart').getContext('2d');
+            if (plantaChart) plantaChart.destroy();
+            plantaChart = new Chart(pCtx, {
+                type: 'bar',
+                data: {
+                    labels: Object.keys(plantas),
+                    datasets: [{ label: 'Colaboradores', data: Object.values(plantas), backgroundColor: '#10b981', borderRadius: 6 }]
+                },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } }
+            });
+
+            let vig = 0, prox = 0, venc = 0, sin = 0;
+            state.colaboradores.filter(c => c.estatus === 'Activo').forEach(c => {
+                const est = getEstatusContrato(c);
+                if (est.estatus === 'Vigente') vig++;
+                else if (est.estatus === 'Próximo a vencer') prox++;
+                else if (est.estatus === 'Vencido') venc++;
+                else sin++;
+            });
+            const cCtx = document.getElementById('contratoChart').getContext('2d');
+            if (contratoChart) contratoChart.destroy();
+            contratoChart = new Chart(cCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Vigente', 'Próximo', 'Vencido', 'Sin contrato'],
+                    datasets: [{ data: [vig, prox, venc, sin], backgroundColor: ['#10b981', '#f59e0b', '#ef4444', '#94a3b8'], borderWidth: 0 }]
+                },
+                options: { responsive: true, maintainAspectRatio: false, cutout: '65%', plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, boxWidth: 8, padding: 10, font: { size: 11 } } } } }
+            });
+        }
+
+        // ============ COLABORADORES ============
+        function renderColaboradores() {
+            const search = document.getElementById('search-colab').value.toLowerCase();
+            const planta = document.getElementById('filter-planta').value;
+            const estatus = document.getElementById('filter-estatus').value;
+
+            let filtered = state.colaboradores.filter(c => {
+                const matchSearch = !search || c.nombre.toLowerCase().includes(search) || c.id.toLowerCase().includes(search);
+                const matchPlanta = planta === 'all' || c.planta === planta;
+                const matchEstatus = estatus === 'all' || c.estatus === estatus;
+                return matchSearch && matchPlanta && matchEstatus;
+            });
+
+            const plantas = [...new Set(state.colaboradores.map(c => c.planta).filter(Boolean))];
+            const currentPlanta = document.getElementById('filter-planta').value;
+            document.getElementById('filter-planta').innerHTML = '<option value="all">Todas las plantas</option>' + plantas.map(p => `<option value="${p}" ${p===currentPlanta?'selected':''}>${p}</option>`).join('');
+
+            let html = '';
+            filtered.forEach(c => {
+                const ant = calcularAntiguedad(c.fechaIngreso);
+                const estatusClass = c.estatus === 'Activo' ? 'status-activo' : 'status-baja';
+                html += `
+                    <tr class="hover:bg-gray-50">
+                        <td class="p-3 lg:p-4 font-mono text-xs font-bold">${c.id}</td>
+                        <td class="p-3 lg:p-4 font-medium">${c.nombre}</td>
+                        <td class="p-3 lg:p-4 text-gray-600">${c.puesto}</td>
+                        <td class="p-3 lg:p-4 text-gray-600">${c.departamento}</td>
+                        <td class="p-3 lg:p-4 text-gray-600">${c.planta}</td>
+                        <td class="p-3 lg:p-4 text-center text-xs">${ant.texto}</td>
+                        <td class="p-3 lg:p-4 text-center"><span class="${estatusClass} px-2 py-1 rounded-md text-xs font-bold">${c.estatus}</span></td>
+                        <td class="p-3 lg:p-4 text-center">
+                            <div class="flex justify-center space-x-1">
+                                <button onclick="editColaborador('${c.id}')" class="p-2 text-blue-600 hover:bg-blue-50 rounded touch-target" title="Editar"><i class="fa-solid fa-pen text-xs"></i></button>
+                                ${c.estatus === 'Activo' ? `<button onclick="openBajaModal('${c.id}')" class="p-2 text-red-600 hover:bg-red-50 rounded touch-target" title="Dar de baja"><i class="fa-solid fa-user-xmark text-xs"></i></button>` : ''}
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            });
+            document.getElementById('colaboradores-table').innerHTML = html || '<tr><td colspan="8" class="p-6 text-center text-gray-500">No hay colaboradores</td></tr>';
+            document.getElementById('colab-count').innerText = `${filtered.length} colaboradores`;
+            document.getElementById('colab-activos-count').innerText = `${state.colaboradores.filter(c => c.estatus === 'Activo').length} activos`;
+        }
+
+        window.openNewColaboradorModal = function() {
+            editingId = null;
+            document.getElementById('colab-modal-title').innerText = 'Nuevo Colaborador';
+            ['col-id','col-nombre','col-nacimiento','col-curp','col-rfc','col-nss','col-puesto','col-departamento','col-planta','col-jefe','col-ingreso','col-contrato-inicio','col-contrato-fin'].forEach(id => document.getElementById(id).value = '');
+            document.getElementById('col-id').disabled = false;
+            document.getElementById('col-tipo-contrato').value = 'Temporal';
+            document.getElementById('colab-modal').classList.remove('hidden');
+        }
+
+        window.editColaborador = function(id) {
+            const c = state.colaboradores.find(x => x.id === id);
+            if (!c) return;
+            editingId = id;
+            document.getElementById('colab-modal-title').innerText = 'Editar Colaborador';
+            document.getElementById('col-id').value = c.id;
+            document.getElementById('col-id').disabled = true;
+            document.getElementById('col-nombre').value = c.nombre;
+            document.getElementById('col-nacimiento').value = c.fechaNacimiento || '';
+            document.getElementById('col-curp').value = c.curp || '';
+            document.getElementById('col-rfc').value = c.rfc || '';
+            document.getElementById('col-nss').value = c.nss || '';
+            document.getElementById('col-puesto').value = c.puesto;
+            document.getElementById('col-departamento').value = c.departamento;
+            document.getElementById('col-planta').value = c.planta;
+            document.getElementById('col-jefe').value = c.jefeInmediato || '';
+            document.getElementById('col-ingreso').value = c.fechaIngreso;
+            document.getElementById('col-tipo-contrato').value = c.tipoContrato || 'Temporal';
+            const cont = getContratoActual(c);
+            document.getElementById('col-contrato-inicio').value = cont?.inicio || '';
+            document.getElementById('col-contrato-fin').value = cont?.fin || '';
+            document.getElementById('colab-modal').classList.remove('hidden');
+        }
+
+        window.closeColabModal = function() { document.getElementById('colab-modal').classList.add('hidden'); }
+
+        window.saveColaborador = async function() {
+            const id = document.getElementById('col-id').value.trim().toUpperCase();
+            const nombre = document.getElementById('col-nombre').value.trim();
+            const fechaIngreso = document.getElementById('col-ingreso').value;
+            if (!id || !nombre || !fechaIngreso) { toast('ID, Nombre y Fecha de Ingreso son obligatorios', 'error'); return; }
+
+            const data = {
+                id, nombre,
+                fechaNacimiento: document.getElementById('col-nacimiento').value,
+                curp: document.getElementById('col-curp').value.trim(),
+                rfc: document.getElementById('col-rfc').value.trim(),
+                nss: document.getElementById('col-nss').value.trim(),
+                puesto: document.getElementById('col-puesto').value.trim(),
+                departamento: document.getElementById('col-departamento').value.trim(),
+                planta: document.getElementById('col-planta').value.trim(),
+                jefeInmediato: document.getElementById('col-jefe').value.trim(),
+                fechaIngreso,
+                tipoContrato: document.getElementById('col-tipo-contrato').value,
+                estatus: 'Activo'
+            };
+
+            if (editingId) {
+                const idx = state.colaboradores.findIndex(c => c.id === editingId);
+                if (idx >= 0) {
+                    data.contratos = state.colaboradores[idx].contratos || [];
+                    data.vacaciones = state.colaboradores[idx].vacaciones || [];
+                    data.evaluaciones = state.colaboradores[idx].evaluaciones || {};
+                    data.estatus = state.colaboradores[idx].estatus;
+                    data.fechaBaja = state.colaboradores[idx].fechaBaja;
+                    data.motivoBaja = state.colaboradores[idx].motivoBaja;
+                    data.tipoBaja = state.colaboradores[idx].tipoBaja;
+                    state.colaboradores[idx] = { ...state.colaboradores[idx], ...data };
+                }
+                toast('Colaborador actualizado', 'success');
+            } else {
+                if (state.colaboradores.find(c => c.id === id)) { toast('Ese ID ya existe', 'error'); return; }
+                data.contratos = [];
+                data.vacaciones = [];
+                data.evaluaciones = {};
+                const contInicio = document.getElementById('col-contrato-inicio').value;
+                const contFin = document.getElementById('col-contrato-fin').value;
+                if (contInicio && contFin) {
+                    data.contratos.push({ tipo: data.tipoContrato, inicio: contInicio, fin: contFin, decision: 'Nuevo', obs: '' });
+                }
+                state.colaboradores.push(data);
+                toast('Colaborador registrado', 'success');
+            }
+            await saveState();
+            closeColabModal();
+            refreshAll();
+        }
+
+        // ============ BAJA ============
+        window.openBajaModal = function(id) {
+            const c = state.colaboradores.find(x => x.id === id);
+            if (!c) return;
+            bajaId = id;
+            document.getElementById('baja-nombre').innerText = `${c.id} - ${c.nombre}`;
+            document.getElementById('baja-fecha').value = new Date().toISOString().split('T')[0];
+            document.getElementById('baja-tipo').value = 'Renuncia';
+            document.getElementById('baja-motivo').value = '';
+            document.getElementById('baja-modal').classList.remove('hidden');
+        }
+        window.closeBajaModal = function() { document.getElementById('baja-modal').classList.add('hidden'); }
+
+        window.confirmarBaja = async function() {
+            const c = state.colaboradores.find(x => x.id === bajaId);
+            if (!c) return;
+            const fecha = document.getElementById('baja-fecha').value;
+            const tipo = document.getElementById('baja-tipo').value;
+            const motivo = document.getElementById('baja-motivo').value.trim();
+            if (!fecha) { toast('Fecha de baja requerida', 'error'); return; }
+            c.estatus = 'Baja';
+            c.fechaBaja = fecha;
+            c.tipoBaja = tipo;
+            c.motivoBaja = motivo;
+            await saveState();
+            closeBajaModal();
+            refreshAll();
+            toast('Baja registrada', 'success');
+        }
+
+        // ============ CONTRATOS ============
+        function renderContratos() {
+            const search = document.getElementById('search-contrato').value.toLowerCase();
+            const filterEst = document.getElementById('filter-contrato-estatus').value;
+
+            let rows = [];
+            state.colaboradores.forEach(c => {
+                (c.contratos || []).forEach((cont, idx) => {
+                    const esUltimo = idx === c.contratos.length - 1;
+                    const est = esUltimo ? getEstatusContrato(c) : { estatus: 'Histórico', dias: 0, clase: 'bg-gray-100 text-gray-600' };
+                    const matchSearch = !search || c.nombre.toLowerCase().includes(search) || c.id.toLowerCase().includes(search);
+                    const matchFilter = filterEst === 'all' || 
+                        (filterEst === 'Vigente' && est.estatus === 'Vigente') ||
+                        (filterEst === 'Proximo' && est.estatus === 'Próximo a vencer') ||
+                        (filterEst === 'Vencido' && est.estatus === 'Vencido');
+                    if (matchSearch && matchFilter) {
+                        rows.push({ col: c, cont, est, esUltimo });
+                    }
+                });
+            });
+
+            let html = '';
+            rows.forEach(({ col, cont, est, esUltimo }) => {
+                html += `
+                    <tr class="hover:bg-gray-50">
+                        <td class="p-3 lg:p-4 font-medium">${col.nombre}<br><span class="text-xs text-gray-500 font-mono">${col.id}</span></td>
+                        <td class="p-3 lg:p-4 text-gray-600">${cont.tipo}</td>
+                        <td class="p-3 lg:p-4 text-sm">${formatDate(cont.inicio)}</td>
+                        <td class="p-3 lg:p-4 text-sm">${formatDate(cont.fin)}</td>
+                        <td class="p-3 lg:p-4 text-center font-bold ${est.dias < 0 ? 'text-red-600' : est.dias <= 30 ? 'text-amber-600' : 'text-emerald-600'}">${cont.tipo === 'Indefinido' || cont.tipo === 'Planta' ? '' : (est.dias < 0 ? 0 : est.dias)}</td>
+                        <td class="p-3 lg:p-4 text-center"><span class="${est.clase} px-2 py-1 rounded-md text-xs font-bold">${est.estatus}</span></td>
+                        <td class="p-3 lg:p-4 text-center">
+                            ${esUltimo && col.estatus === 'Activo' ? `<button onclick="openNuevoContratoModal('${col.id}')" class="text-xs bg-emerald-50 text-emerald-700 hover:bg-emerald-100 px-2 py-1.5 rounded border border-emerald-200 touch-target">Renovar</button>` : '<span class="text-xs text-gray-400">Histórico</span>'}
+                        </td>
+                    </tr>
+                `;
+            });
+            document.getElementById('contratos-table').innerHTML = html || '<tr><td colspan="7" class="p-6 text-center text-gray-500">No hay contratos registrados</td></tr>';
+        }
+
+        window.openNuevoContratoModal = function(colId = '') {
+            const select = document.getElementById('cont-colaborador');
+            select.innerHTML = '<option value="">-- Seleccione --</option>' + state.colaboradores.filter(c => c.estatus === 'Activo').map(c => `<option value="${c.id}" ${c.id===colId?'selected':''}>${c.id} - ${c.nombre}</option>`).join('');
+            document.getElementById('cont-tipo').value = 'Temporal';
+            document.getElementById('cont-decision').value = 'Renovación';
+            document.getElementById('cont-inicio').value = '';
+            document.getElementById('cont-fin').value = '';
+            document.getElementById('cont-obs').value = '';
+            document.getElementById('contrato-modal').classList.remove('hidden');
+        }
+        window.closeContratoModal = function() { document.getElementById('contrato-modal').classList.add('hidden'); }
+
+        window.saveContrato = async function() {
+            const colId = document.getElementById('cont-colaborador').value;
+            const tipo = document.getElementById('cont-tipo').value;
+            const decision = document.getElementById('cont-decision').value;
+            const inicio = document.getElementById('cont-inicio').value;
+            const fin = document.getElementById('cont-fin').value;
+            const obs = document.getElementById('cont-obs').value.trim();
+            if (!colId || !inicio || !fin) { toast('Colaborador, inicio y fin son obligatorios', 'error'); return; }
+            const col = state.colaboradores.find(c => c.id === colId);
+            if (!col) return;
+            if (!col.contratos) col.contratos = [];
+            col.contratos.push({ tipo, inicio, fin, decision, obs });
+            col.tipoContrato = tipo;
+            if (decision === 'Baja') {
+                col.estatus = 'Baja';
+                col.fechaBaja = fin;
+                col.tipoBaja = 'Término de contrato';
+            }
+            await saveState();
+            closeContratoModal();
+            refreshAll();
+            toast('Contrato registrado', 'success');
+        }
+
+        // ============ VACACIONES ============
+        function renderVacaciones() {
+            const search = document.getElementById('search-vacacion').value.toLowerCase();
+            let html = '';
+            state.colaboradores.filter(c => c.estatus === 'Activo' && (!search || c.nombre.toLowerCase().includes(search) || c.id.toLowerCase().includes(search))).forEach(c => {
+                const vac = getVacaciones(c);
+                html += `
+                    <tr class="hover:bg-gray-50">
+                        <td class="p-3 lg:p-4 font-medium">${c.nombre}<br><span class="text-xs text-gray-500 font-mono">${c.id}</span></td>
+                        <td class="p-3 lg:p-4 text-center text-xs">${calcularAntiguedad(c.fechaIngreso).texto}</td>
+                        <td class="p-3 lg:p-4 text-center font-bold">${vac.corresp}</td>
+                        <td class="p-3 lg:p-4 text-center font-bold text-amber-600">${vac.disfrutados}</td>
+                        <td class="p-3 lg:p-4 text-center font-bold text-emerald-600">${vac.disponibles}</td>
+                        <td class="p-3 lg:p-4 text-center">
+                            <button onclick="verHistorialVacaciones('${c.id}')" class="text-xs bg-blue-50 text-blue-700 hover:bg-blue-100 px-2 py-1.5 rounded border border-blue-200 touch-target">Ver historial</button>
+                        </td>
+                    </tr>
+                `;
+            });
+            document.getElementById('vacaciones-table').innerHTML = html || '<tr><td colspan="6" class="p-6 text-center text-gray-500">No hay colaboradores activos</td></tr>';
+        }
+
+        window.openNuevaVacacionModal = function() {
+            const select = document.getElementById('vac-colaborador');
+            select.innerHTML = '<option value="">-- Seleccione --</option>' + state.colaboradores.filter(c => c.estatus === 'Activo').map(c => {
+                const vac = getVacaciones(c);
+                return `<option value="${c.id}">${c.id} - ${c.nombre} (Disp: ${vac.disponibles})</option>`;
+            }).join('');
+            document.getElementById('vac-inicio').value = '';
+            document.getElementById('vac-fin').value = '';
+            document.getElementById('vac-dias').value = '';
+            document.getElementById('vac-estatus').value = 'Aprobado';
+            document.getElementById('vac-obs').value = '';
+            document.getElementById('vac-info').classList.add('hidden');
+            document.getElementById('vacacion-modal').classList.remove('hidden');
+        }
+        window.closeVacacionModal = function() { document.getElementById('vacacion-modal').classList.add('hidden'); }
+
+        window.updateVacacionInfo = function() {
+            const colId = document.getElementById('vac-colaborador').value;
+            const info = document.getElementById('vac-info');
+            if (!colId) { info.classList.add('hidden'); return; }
+            const col = state.colaboradores.find(c => c.id === colId);
+            const vac = getVacaciones(col);
+            document.getElementById('vac-disp-info').innerText = vac.disponibles;
+            info.classList.remove('hidden');
+        }
+
+        window.saveVacacion = async function() {
+            const colId = document.getElementById('vac-colaborador').value;
+            const inicio = document.getElementById('vac-inicio').value;
+            const fin = document.getElementById('vac-fin').value;
+            const dias = parseInt(document.getElementById('vac-dias').value);
+            const estatus = document.getElementById('vac-estatus').value;
+            const obs = document.getElementById('vac-obs').value.trim();
+            if (!colId || !inicio || !fin || !dias) { toast('Todos los campos son obligatorios', 'error'); return; }
+            const col = state.colaboradores.find(c => c.id === colId);
+            const vac = getVacaciones(col);
+            if (estatus === 'Aprobado' && dias > vac.disponibles) { toast(`Días disponibles: ${vac.disponibles}`, 'error'); return; }
+            if (!col.vacaciones) col.vacaciones = [];
+            col.vacaciones.push({ inicio, fin, dias, estatus, obs, fechaRegistro: new Date().toISOString() });
+            await saveState();
+            closeVacacionModal();
+            refreshAll();
+            toast('Vacaciones registradas', 'success');
+        }
+
+        window.verHistorialVacaciones = function(colId) {
+            const col = state.colaboradores.find(c => c.id === colId);
+            if (!col) return;
+            const vac = getVacaciones(col);
+            let histHtml = (col.vacaciones || []).map(v => `
+                <tr class="border-b">
+                    <td class="p-2 text-sm">${formatDate(v.inicio)}</td>
+                    <td class="p-2 text-sm">${formatDate(v.fin)}</td>
+                    <td class="p-2 text-center font-bold">${v.dias}</td>
+                    <td class="p-2 text-center"><span class="${v.estatus==='Aprobado'?'status-activo':v.estatus==='Pendiente'?'status-proximo':'status-baja'} px-2 py-1 rounded text-xs font-bold">${v.estatus}</span></td>
+                    <td class="p-2 text-xs text-gray-600">${v.obs || '-'}</td>
+                </tr>
+            `).join('');
+            document.getElementById('hist-vac-content').innerHTML = `
+                <div class="mb-4 p-4 bg-emerald-50 rounded-lg">
+                    <h4 class="font-bold text-gray-800 mb-2">${col.nombre}</h4>
+                    <div class="grid grid-cols-3 gap-4 text-center">
+                        <div><p class="text-xs text-gray-500">Correspondientes</p><p class="font-bold text-lg">${vac.corresp}</p></div>
+                        <div><p class="text-xs text-gray-500">Disfrutados</p><p class="font-bold text-lg text-amber-600">${vac.disfrutados}</p></div>
+                        <div><p class="text-xs text-gray-500">Disponibles</p><p class="font-bold text-lg text-emerald-600">${vac.disponibles}</p></div>
+                    </div>
+                </div>
+                <div class="table-wrapper">
+                <table class="w-full text-sm border-collapse">
+                    <thead><tr class="bg-gray-100"><th class="p-2 text-left">Inicio</th><th class="p-2 text-left">Fin</th><th class="p-2 text-center">Días</th><th class="p-2 text-center">Estatus</th><th class="p-2 text-left">Obs</th></tr></thead>
+                    <tbody>${histHtml || '<tr><td colspan="5" class="p-4 text-center text-gray-500">Sin historial</td></tr>'}</tbody>
+                </table>
+                </div>
+            `;
+            document.getElementById('hist-vac-modal').classList.remove('hidden');
+        }
+
+        // ============ EVALUACIONES ============
+        function renderEvaluaciones() {
+            const search = document.getElementById('search-evaluacion').value.toLowerCase();
+            const filterTipo = document.getElementById('filter-evaluacion-tipo').value;
+            
+            let html = '';
+            state.colaboradores.forEach(c => {
+                const matchSearch = !search || c.nombre.toLowerCase().includes(search) || c.id.toLowerCase().includes(search);
+                if (!matchSearch) return;
+                
+                const evals = c.evaluaciones || {};
+                const onboarding = evals.onboarding || {};
+                const mes1 = evals.mes1 || {};
+                const mes2 = evals.mes2 || {};
+                const mes3 = evals.mes3 || {};
+                const salida = evals.salida || {};
+                
+                const showOnboarding = filterTipo === 'all' || filterTipo === 'Onboarding';
+                const showMes1 = filterTipo === 'all' || filterTipo === 'Mes 1';
+                const showMes2 = filterTipo === 'all' || filterTipo === 'Mes 2';
+                const showMes3 = filterTipo === 'all' || filterTipo === 'Mes 3';
+                const showSalida = filterTipo === 'all' || filterTipo === 'Salida';
+                
+                if (showOnboarding || showMes1 || showMes2 || showMes3 || showSalida) {
+                    html += `
+                        <tr class="hover:bg-gray-50">
+                            <td class="p-3 lg:p-4 font-medium">${c.nombre}<br><span class="text-xs text-gray-500 font-mono">${c.id}</span></td>
+                            <td class="p-3 lg:p-4 text-center">${onboarding.aplicada ? `<span class="status-completado px-2 py-1 rounded text-xs font-bold">✓ ${formatDate(onboarding.fecha)}</span>` : '<span class="status-pendiente px-2 py-1 rounded text-xs font-bold">Pendiente</span>'}</td>
+                            <td class="p-3 lg:p-4 text-center">${mes1.aplicada ? `<span class="status-completado px-2 py-1 rounded text-xs font-bold">✓ ${formatDate(mes1.fecha)}</span>` : '<span class="status-pendiente px-2 py-1 rounded text-xs font-bold">Pendiente</span>'}</td>
+                            <td class="p-3 lg:p-4 text-center">${mes2.aplicada ? `<span class="status-completado px-2 py-1 rounded text-xs font-bold">✓ ${formatDate(mes2.fecha)}</span>` : '<span class="status-pendiente px-2 py-1 rounded text-xs font-bold">Pendiente</span>'}</td>
+                            <td class="p-3 lg:p-4 text-center">${mes3.aplicada ? `<span class="status-completado px-2 py-1 rounded text-xs font-bold">✓ ${formatDate(mes3.fecha)}</span>` : '<span class="status-pendiente px-2 py-1 rounded text-xs font-bold">Pendiente</span>'}</td>
+                            <td class="p-3 lg:p-4 text-center">${salida.aplicada ? `<span class="status-completado px-2 py-1 rounded text-xs font-bold">✓ ${formatDate(salida.fecha)}</span>` : (c.estatus === 'Baja' ? '<span class="status-pendiente px-2 py-1 rounded text-xs font-bold">Pendiente</span>' : '<span class="status-no-aplicado px-2 py-1 rounded text-xs font-bold">N/A</span>')}</td>
+                            <td class="p-3 lg:p-4 text-center">${salida.finiquitoEntregado ? '<span class="status-completado px-2 py-1 rounded text-xs font-bold">✓</span>' : (c.estatus === 'Baja' ? '<span class="text-red-600 font-bold">✗</span>' : '<span class="status-no-aplicado px-2 py-1 rounded text-xs font-bold">N/A</span>')}</td>
+                            <td class="p-3 lg:p-4 text-center">
+                                <button onclick="openNuevaEvaluacionModal('${c.id}')" class="text-xs bg-purple-50 text-purple-700 hover:bg-purple-100 px-2 py-1.5 rounded border border-purple-200 touch-target">Registrar</button>
+                            </td>
+                        </tr>
+                    `;
+                }
+            });
+            document.getElementById('evaluaciones-table').innerHTML = html || '<tr><td colspan="8" class="p-6 text-center text-gray-500">No hay colaboradores</td></tr>';
+        }
+
+        window.openNuevaEvaluacionModal = function(colId = '') {
+            const select = document.getElementById('eval-colaborador');
+            select.innerHTML = '<option value="">-- Seleccione --</option>' + state.colaboradores.map(c => `<option value="${c.id}" ${c.id===colId?'selected':''}>${c.id} - ${c.nombre}</option>`).join('');
+            document.getElementById('eval-tipo').value = 'Onboarding';
+            document.getElementById('eval-fecha').value = new Date().toISOString().split('T')[0];
+            document.getElementById('eval-resultado').value = 'Satisfactorio';
+            document.getElementById('eval-obs').value = '';
+            document.getElementById('eval-finiquito-check').checked = false;
+            document.getElementById('eval-finiquito-fecha').value = '';
+            document.getElementById('eval-finiquito-obs').value = '';
+            document.getElementById('eval-finiquito-section').classList.add('hidden');
+            document.getElementById('evaluacion-modal').classList.remove('hidden');
+        }
+        window.closeEvaluacionModal = function() { document.getElementById('evaluacion-modal').classList.add('hidden'); }
+
+        window.updateEvaluacionTipo = function() {
+            const tipo = document.getElementById('eval-tipo').value;
+            const finiquitoSection = document.getElementById('eval-finiquito-section');
+            if (tipo === 'Salida') {
+                finiquitoSection.classList.remove('hidden');
+            } else {
+                finiquitoSection.classList.add('hidden');
+            }
+        }
+
+        window.saveEvaluacion = async function() {
+            const colId = document.getElementById('eval-colaborador').value;
+            const tipo = document.getElementById('eval-tipo').value;
+            const fecha = document.getElementById('eval-fecha').value;
+            const resultado = document.getElementById('eval-resultado').value;
+            const obs = document.getElementById('eval-obs').value.trim();
+            
+            if (!colId || !fecha) { toast('Colaborador y fecha son obligatorios', 'error'); return; }
+            
+            const col = state.colaboradores.find(c => c.id === colId);
+            if (!col) return;
+            if (!col.evaluaciones) col.evaluaciones = {};
+            
+            const evalData = {
+                aplicada: true,
+                fecha,
+                resultado,
+                obs
+            };
+            
+            if (tipo === 'Salida') {
+                evalData.finiquitoEntregado = document.getElementById('eval-finiquito-check').checked;
+                evalData.finiquitoFecha = document.getElementById('eval-finiquito-fecha').value;
+                evalData.finiquitoObs = document.getElementById('eval-finiquito-obs').value.trim();
+            }
+            
+            let tipoKey = '';
+            if (tipo === 'Onboarding') tipoKey = 'onboarding';
+            else if (tipo === 'Mes 1') tipoKey = 'mes1';
+            else if (tipo === 'Mes 2') tipoKey = 'mes2';
+            else if (tipo === 'Mes 3') tipoKey = 'mes3';
+            else if (tipo === 'Salida') tipoKey = 'salida';
+            
+            col.evaluaciones[tipoKey] = evalData;
+            
+            await saveState();
+            closeEvaluacionModal();
+            refreshAll();
+            toast('Evaluación registrada', 'success');
+        }
+
+        // ============ MOVIMIENTOS ============
+        function renderMovimientos() {
+            const ingresos = state.colaboradores.filter(c => c.estatus === 'Activo').sort((a,b) => new Date(b.fechaIngreso) - new Date(a.fechaIngreso));
+            const bajas = state.colaboradores.filter(c => c.estatus === 'Baja' && c.fechaBaja).sort((a,b) => new Date(b.fechaBaja) - new Date(a.fechaBaja));
+
+            document.getElementById('ingresos-count').innerText = ingresos.length;
+            document.getElementById('bajas-count').innerText = bajas.length;
+
+            document.getElementById('ingresos-list').innerHTML = ingresos.slice(0, 10).map(c => `
+                <div class="flex items-center justify-between p-3 bg-emerald-50 rounded-lg border border-emerald-100">
+                    <div>
+                        <p class="font-bold text-sm text-gray-800">${c.nombre}</p>
+                        <p class="text-xs text-gray-600">${c.puesto} - ${c.planta}</p>
+                    </div>
+                    <span class="text-xs text-emerald-700 font-bold">${formatDate(c.fechaIngreso)}</span>
+                </div>
+            `).join('') || '<p class="text-center text-gray-500 text-sm p-4">Sin ingresos</p>';
+
+            document.getElementById('bajas-list').innerHTML = bajas.slice(0, 10).map(c => `
+                <div class="flex items-center justify-between p-3 bg-red-50 rounded-lg border border-red-100">
+                    <div>
+                        <p class="font-bold text-sm text-gray-800">${c.nombre}</p>
+                        <p class="text-xs text-gray-600">${c.tipoBaja || 'Baja'}</p>
+                    </div>
+                    <span class="text-xs text-red-700 font-bold">${formatDate(c.fechaBaja)}</span>
+                </div>
+            `).join('') || '<p class="text-center text-gray-500 text-sm p-4">Sin bajas</p>';
+
+            let movimientos = [];
+            state.colaboradores.forEach(c => {
+                movimientos.push({ fecha: c.fechaIngreso, tipo: 'Ingreso', col: c, detalle: `${c.tipoContrato || 'Contrato'} - ${c.planta}` });
+                (c.contratos || []).forEach(cont => {
+                    if (cont.decision && cont.decision !== 'Nuevo') {
+                        movimientos.push({ fecha: cont.inicio, tipo: 'Contrato', col: c, detalle: `${cont.decision} - ${cont.tipo}` });
+                    }
+                });
+                if (c.estatus === 'Baja' && c.fechaBaja) {
+                    movimientos.push({ fecha: c.fechaBaja, tipo: 'Baja', col: c, detalle: `${c.tipoBaja || ''} ${c.motivoBaja ? '- ' + c.motivoBaja : ''}` });
+                }
+                if (c.evaluaciones) {
+                    Object.entries(c.evaluaciones).forEach(([key, eval]) => {
+                        if (eval.aplicada) {
+                            movimientos.push({ fecha: eval.fecha, tipo: 'Evaluación', col: c, detalle: `${key.charAt(0).toUpperCase() + key.slice(1)} - ${eval.resultado}` });
+                        }
+                    });
+                }
+            });
+            movimientos.sort((a,b) => new Date(b.fecha) - new Date(a.fecha));
+
+            document.getElementById('movimientos-table').innerHTML = movimientos.map(m => `
+                <tr class="hover:bg-gray-50">
+                    <td class="p-3 lg:p-4 text-sm">${formatDate(m.fecha)}</td>
+                    <td class="p-3 lg:p-4"><span class="${m.tipo==='Ingreso'?'status-activo':m.tipo==='Baja'?'status-baja':m.tipo==='Evaluación'?'bg-purple-100 text-purple-700':'bg-blue-100 text-blue-700'} px-2 py-1 rounded-md text-xs font-bold">${m.tipo.toUpperCase()}</span></td>
+                    <td class="p-3 lg:p-4 font-medium">${m.col.nombre}</td>
+                    <td class="p-3 lg:p-4 text-gray-600">${m.col.puesto}</td>
+                    <td class="p-3 lg:p-4 text-xs text-gray-500">${m.detalle}</td>
+                </tr>
+            `).join('') || '<tr><td colspan="5" class="p-6 text-center text-gray-500">Sin movimientos</td></tr>';
+        }
+
+        // ============ EXPEDIENTE ============
+        window.buscarExpediente = function() {
+            const search = document.getElementById('search-expediente').value.toLowerCase().trim();
+            const results = document.getElementById('expediente-results');
+            const ficha = document.getElementById('expediente-ficha');
+            if (!search) { results.innerHTML = ''; ficha.classList.add('hidden'); return; }
+            const matches = state.colaboradores.filter(c => c.nombre.toLowerCase().includes(search) || c.id.toLowerCase().includes(search));
+            results.innerHTML = matches.map(c => `
+                <button onclick="mostrarExpediente('${c.id}')" class="w-full text-left p-3 hover:bg-gray-50 rounded-lg border border-gray-200 flex items-center justify-between touch-target">
+                    <div>
+                        <p class="font-bold text-sm">${c.nombre}</p>
+                        <p class="text-xs text-gray-500">${c.id} - ${c.puesto}</p>
+                    </div>
+                    <span class="${c.estatus==='Activo'?'status-activo':'status-baja'} px-2 py-1 rounded text-xs font-bold">${c.estatus}</span>
+                </button>
+            `).join('') || '<p class="text-center text-gray-500 text-sm p-4">Sin resultados</p>';
+        }
+
+        function mostrarExpediente(id) {
+            const c = state.colaboradores.find(x => x.id === id);
+            if (!c) return;
+            document.getElementById('expediente-results').innerHTML = '';
+            document.getElementById('search-expediente').value = `${c.id} - ${c.nombre}`;
+            const ant = calcularAntiguedad(c.fechaIngreso);
+            const cont = getContratoActual(c);
+            const estCont = getEstatusContrato(c);
+            const vac = getVacaciones(c);
+
+            document.getElementById('exp-nombre').innerText = c.nombre;
+            document.getElementById('exp-puesto').innerText = c.puesto;
+            document.getElementById('exp-id').innerText = c.id;
+            document.getElementById('exp-area').innerText = c.departamento;
+            document.getElementById('exp-planta').innerText = c.planta;
+            document.getElementById('exp-ingreso').innerText = formatDate(c.fechaIngreso);
+            document.getElementById('exp-antiguedad').innerText = ant.texto;
+            document.getElementById('exp-estatus').innerHTML = `<span class="${c.estatus==='Activo'?'status-activo':'status-baja'} px-2 py-1 rounded-md text-xs font-bold">${c.estatus}</span>`;
+            document.getElementById('exp-jefe').innerText = c.jefeInmediato || '--';
+            document.getElementById('exp-edad').innerText = calcularEdad(c.fechaNacimiento) + ' años';
+            document.getElementById('exp-nss').innerText = c.nss || '--';
+
+            document.getElementById('exp-contrato-tipo').innerText = cont?.tipo || '--';
+            document.getElementById('exp-contrato-inicio').innerText = formatDate(cont?.inicio);
+            document.getElementById('exp-contrato-fin').innerText = formatDate(cont?.fin);
+            document.getElementById('exp-contrato-estatus').innerHTML = cont ? `<span class="${estCont.clase} px-2 py-1 rounded-md text-xs font-bold">${estCont.estatus}</span>` : '--';
+
+            document.getElementById('exp-vac-corr').innerText = vac.corresp;
+            document.getElementById('exp-vac-usadas').innerText = vac.disfrutados;
+            document.getElementById('exp-vac-disp').innerText = vac.disponibles;
+
+            // Evaluaciones
+            const evals = c.evaluaciones || {};
+            let evalHtml = '';
+            ['onboarding', 'mes1', 'mes2', 'mes3', 'salida'].forEach(key => {
+                if (evals[key] && evals[key].aplicada) {
+                    const labels = { onboarding: 'Onboarding', mes1: 'Mes 1', mes2: 'Mes 2', mes3: 'Mes 3', salida: 'Encuesta de Salida' };
+                    evalHtml += `
+                        <div class="flex items-start space-x-3 p-3 bg-purple-50 rounded-lg">
+                            <div class="w-8 h-8 bg-purple-100 text-purple-600 rounded-full flex items-center justify-center flex-shrink-0"><i class="fa-solid fa-clipboard-check text-sm"></i></div>
+                            <div class="flex-1 min-w-0">
+                                <div class="flex items-center justify-between flex-wrap gap-2">
+                                    <p class="font-bold text-sm text-gray-800">${labels[key]}</p>
+                                    <p class="text-xs text-gray-500">${formatDate(evals[key].fecha)}</p>
+                                </div>
+                                <p class="text-sm text-gray-600">Resultado: <strong>${evals[key].resultado}</strong></p>
+                                ${evals[key].finiquitoEntregado ? '<p class="text-xs text-emerald-600 font-bold mt-1"><i class="fa-solid fa-check mr-1"></i>Finiquito entregado</p>' : ''}
+                            </div>
+                        </div>
+                    `;
+                }
+            });
+            document.getElementById('exp-evaluaciones').innerHTML = evalHtml || '<p class="text-center text-gray-500 text-sm">Sin evaluaciones registradas</p>';
+
+            // Historial
+            let hist = [];
+            hist.push({ fecha: c.fechaIngreso, tipo: 'Ingreso', icon: 'fa-user-plus', color: 'emerald', desc: `Ingreso como ${c.puesto} en ${c.planta}` });
+            (c.contratos || []).forEach(cont => {
+                hist.push({ fecha: cont.inicio, tipo: 'Contrato', icon: 'fa-file-signature', color: 'blue', desc: `${cont.decision} - ${cont.tipo} (vence ${formatDate(cont.fin)})` });
+            });
+            (c.vacaciones || []).filter(v => v.estatus === 'Aprobado').forEach(v => {
+                hist.push({ fecha: v.inicio, tipo: 'Vacaciones', icon: 'fa-umbrella-beach', color: 'amber', desc: `${v.dias} días (${formatDate(v.inicio)} - ${formatDate(v.fin)})` });
+            });
+            if (c.evaluaciones) {
+                Object.entries(c.evaluaciones).forEach(([key, eval]) => {
+                    if (eval.aplicada) {
+                        const labels = { onboarding: 'Onboarding', mes1: 'Mes 1', mes2: 'Mes 2', mes3: 'Mes 3', salida: 'Encuesta de Salida' };
+                        hist.push({ fecha: eval.fecha, tipo: 'Evaluación', icon: 'fa-clipboard-check', color: 'purple', desc: `${labels[key] || key} - ${eval.resultado}` });
+                    }
+                });
+            }
+            if (c.estatus === 'Baja' && c.fechaBaja) {
+                hist.push({ fecha: c.fechaBaja, tipo: 'Baja', icon: 'fa-user-xmark', color: 'red', desc: `${c.tipoBaja || 'Baja'} ${c.motivoBaja ? '- ' + c.motivoBaja : ''}` });
+            }
+            hist.sort((a,b) => new Date(b.fecha) - new Date(a.fecha));
+
+            document.getElementById('exp-historial').innerHTML = hist.map(h => `
+                <div class="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg">
+                    <div class="w-8 h-8 bg-${h.color}-100 text-${h.color}-600 rounded-full flex items-center justify-center flex-shrink-0"><i class="fa-solid ${h.icon} text-sm"></i></div>
+                    <div class="flex-1 min-w-0">
+                        <div class="flex items-center justify-between flex-wrap gap-2">
+                            <p class="font-bold text-sm text-gray-800">${h.tipo}</p>
+                            <p class="text-xs text-gray-500">${formatDate(h.fecha)}</p>
+                        </div>
+                        <p class="text-sm text-gray-600">${h.desc}</p>
+                    </div>
+                </div>
+            `).join('') || '<p class="text-center text-gray-500 text-sm">Sin historial</p>';
+
+            document.getElementById('expediente-ficha').classList.remove('hidden');
+        }
+
+        // ============ REPORTES ============
+        function downloadCSV(content, filename) {
+            const blob = new Blob(["\uFEFF" + content], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.download = filename;
+            link.click();
+        }
+
+        window.exportarReporte = function(tipo) {
+            let csv = '', filename = '';
+            const hoy = new Date().toISOString().split('T')[0];
+
+            if (tipo === 'activos') {
+                csv = 'No.Empleado,Nombre,Puesto,Departamento,Planta,Jefe Inmediato,F. Ingreso,Antigüedad,Tipo Contrato,Estatus\n';
+                state.colaboradores.filter(c => c.estatus === 'Activo').forEach(c => {
+                    csv += `${c.id},"${c.nombre}","${c.puesto}","${c.departamento}","${c.planta}","${c.jefeInmediato||''}",${c.fechaIngreso},"${calcularAntiguedad(c.fechaIngreso).texto}","${c.tipoContrato||''}",${c.estatus}\n`;
+                });
+                filename = `Personal_Activo_${hoy}.csv`;
+            } else if (tipo === 'bajas') {
+                csv = 'No.Empleado,Nombre,Puesto,Departamento,Planta,F. Ingreso,F. Baja,Tipo Baja,Motivo\n';
+                state.colaboradores.filter(c => c.estatus === 'Baja').forEach(c => {
+                    csv += `${c.id},"${c.nombre}","${c.puesto}","${c.departamento}","${c.planta}",${c.fechaIngreso},${c.fechaBaja||''},"${c.tipoBaja||''}","${c.motivoBaja||''}"\n`;
+                });
+                filename = `Personal_Baja_${hoy}.csv`;
+            } else if (tipo === 'planta') {
+                csv = 'No.Empleado,Nombre,Puesto,Departamento,Planta,F. Ingreso,Tipo Contrato\n';
+                state.colaboradores.filter(c => c.estatus === 'Activo' && getContratoActual(c)?.tipo === 'Planta').forEach(c => {
+                    csv += `${c.id},"${c.nombre}","${c.puesto}","${c.departamento}","${c.planta}",${c.fechaIngreso},"Planta"\n`;
+                });
+                filename = `Personal_Planta_${hoy}.csv`;
+            } else if (tipo === 'contratos-proximos') {
+                csv = 'No.Empleado,Nombre,Tipo Contrato,Inicio,Vencimiento,Días Restantes,Estatus\n';
+                state.colaboradores.filter(c => c.estatus === 'Activo').forEach(c => {
+                    const est = getEstatusContrato(c);
+                    const cont = getContratoActual(c);
+                    if (cont && (est.estatus === 'Próximo a vencer' || est.estatus === 'Vencido')) {
+                        csv += `${c.id},"${c.nombre}","${cont.tipo}",${cont.inicio},${cont.fin},${est.dias < 0 ? 0 : est.dias},"${est.estatus}"\n`;
+                    }
+                });
+                filename = `Contratos_Proximos_Vencer_${hoy}.csv`;
+            } else if (tipo === 'contratos-todos') {
+                csv = 'No.Empleado,Nombre,Tipo,Inicio,Fin,Decisión,Observaciones\n';
+                state.colaboradores.forEach(c => {
+                    (c.contratos || []).forEach(cont => {
+                        csv += `${c.id},"${c.nombre}","${cont.tipo}",${cont.inicio},${cont.fin},"${cont.decision||''}","${cont.obs||''}"\n`;
+                    });
+                });
+                filename = `Historial_Contratos_${hoy}.csv`;
+            } else if (tipo === 'ingresos') {
+                csv = 'No.Empleado,Nombre,Puesto,Departamento,Planta,F. Ingreso,Tipo Contrato\n';
+                state.colaboradores.forEach(c => {
+                    csv += `${c.id},"${c.nombre}","${c.puesto}","${c.departamento}","${c.planta}",${c.fechaIngreso},"${c.tipoContrato||''}"\n`;
+                });
+                filename = `Ingresos_${hoy}.csv`;
+            } else if (tipo === 'bajas-mov') {
+                csv = 'No.Empleado,Nombre,Puesto,F. Ingreso,F. Baja,Tipo Baja,Motivo\n';
+                state.colaboradores.filter(c => c.estatus === 'Baja').forEach(c => {
+                    csv += `${c.id},"${c.nombre}","${c.puesto}",${c.fechaIngreso},${c.fechaBaja||''},"${c.tipoBaja||''}","${c.motivoBaja||''}"\n`;
+                });
+                filename = `Bajas_${hoy}.csv`;
+            } else if (tipo === 'vacaciones') {
+                csv = 'No.Empleado,Nombre,Antigüedad,Días Correspondientes,Días Disfrutados,Días Disponibles\n';
+                state.colaboradores.filter(c => c.estatus === 'Activo').forEach(c => {
+                    const vac = getVacaciones(c);
+                    csv += `${c.id},"${c.nombre}","${calcularAntiguedad(c.fechaIngreso).texto}",${vac.corresp},${vac.disfrutados},${vac.disponibles}\n`;
+                });
+                filename = `Vacaciones_${hoy}.csv`;
+            } else if (tipo === 'evaluaciones') {
+                csv = 'No.Empleado,Nombre,Onboarding,Mes 1,Mes 2,Mes 3,Encuesta Salida,Finiquito\n';
+                state.colaboradores.forEach(c => {
+                    const evals = c.evaluaciones || {};
+                    const getEvalStatus = (key) => evals[key] && evals[key].aplicada ? `${formatDate(evals[key].fecha)} - ${evals[key].resultado}` : 'Pendiente';
+                    const finiquito = evals.salida && evals.salida.finiquitoEntregado ? 'Entregado' : (c.estatus === 'Baja' ? 'Pendiente' : 'N/A');
+                    csv += `${c.id},"${c.nombre}","${getEvalStatus('onboarding')}","${getEvalStatus('mes1')}","${getEvalStatus('mes2')}","${getEvalStatus('mes3')}","${getEvalStatus('salida')}","${finiquito}"\n`;
+                });
+                filename = `Evaluaciones_${hoy}.csv`;
+            } else if (tipo === 'finiquitos') {
+                csv = 'No.Empleado,Nombre,F. Baja,Tipo Baja,Finiquito Entregado,F. Entrega,Observaciones\n';
+                state.colaboradores.filter(c => c.estatus === 'Baja').forEach(c => {
+                    const evals = c.evaluaciones || {};
+                    const finiquito = evals.salida && evals.salida.finiquitoEntregado ? 'Sí' : 'No';
+                    const fechaEntrega = evals.salida && evals.salida.finiquitoFecha ? formatDate(evals.salida.finiquitoFecha) : '-';
+                    const obs = evals.salida && evals.salida.finiquitoObs ? evals.salida.finiquitoObs : '-';
+                    csv += `${c.id},"${c.nombre}",${c.fechaBaja||''},"${c.tipoBaja||''}","${finiquito}","${fechaEntrega}","${obs}"\n`;
+                });
+                filename = `Finiquitos_${hoy}.csv`;
+            } else if (tipo === 'general') {
+                csv = 'No.Empleado,Nombre,F.Nacimiento,CURP,RFC,NSS,Puesto,Departamento,Planta,Jefe,F.Ingreso,Antigüedad,Tipo Contrato,Estatus,F.Baja,Tipo Baja\n';
+                state.colaboradores.forEach(c => {
+                    csv += `${c.id},"${c.nombre}",${c.fechaNacimiento||''},"${c.curp||''}","${c.rfc||''}","${c.nss||''}","${c.puesto}","${c.departamento}","${c.planta}","${c.jefeInmediato||''}",${c.fechaIngreso},"${calcularAntiguedad(c.fechaIngreso).texto}","${c.tipoContrato||''}",${c.estatus},${c.fechaBaja||''},"${c.tipoBaja||''}"\n`;
+                });
+                filename = `Informacion_General_${hoy}.csv`;
+            }
+
+            downloadCSV(csv, filename);
+            toast('Reporte exportado', 'success');
+        }
+
+        window.exportarReporteFiltrado = function() {
+            const planta = document.getElementById('rep-filter-planta').value;
+            const area = document.getElementById('rep-filter-area').value;
+            const fecha = document.getElementById('rep-filter-fecha').value;
+            let filtered = state.colaboradores.filter(c => {
+                if (planta !== 'all' && c.planta !== planta) return false;
+                if (area !== 'all' && c.departamento !== area) return false;
+                if (fecha && c.fechaIngreso < fecha) return false;
+                return true;
+            });
+            let csv = 'No.Empleado,Nombre,Puesto,Departamento,Planta,F.Ingreso,Antigüedad,Estatus\n';
+            filtered.forEach(c => {
+                csv += `${c.id},"${c.nombre}","${c.puesto}","${c.departamento}","${c.planta}",${c.fechaIngreso},"${calcularAntiguedad(c.fechaIngreso).texto}",${c.estatus}\n`;
+            });
+            downloadCSV(csv, `Reporte_Filtrado_${new Date().toISOString().split('T')[0]}.csv`);
+            toast('Reporte filtrado exportado', 'success');
+        }
+
+        // ============ REFRESH ============
+        function refreshAll() {
+            updateDashboard();
+            renderColaboradores();
+            renderContratos();
+            renderVacaciones();
+            renderEvaluaciones();
+            renderMovimientos();
+            if (document.getElementById('dashboard').classList.contains('active')) updateCharts();
+            const plantas = [...new Set(state.colaboradores.map(c => c.planta).filter(Boolean))];
+            const areas = [...new Set(state.colaboradores.map(c => c.departamento).filter(Boolean))];
+            const currentP = document.getElementById('rep-filter-planta').value;
+            const currentA = document.getElementById('rep-filter-area').value;
+            document.getElementById('rep-filter-planta').innerHTML = '<option value="all">Todas las plantas</option>' + plantas.map(p => `<option value="${p}" ${p===currentP?'selected':''}>${p}</option>`).join('');
+            document.getElementById('rep-filter-area').innerHTML = '<option value="all">Todas las áreas</option>' + areas.map(a => `<option value="${a}" ${a===currentA?'selected':''}>${a}</option>`).join('');
+        }
+
+        function init() {
+            setupRealtime();
+        }
+        init();
+    </script>
+</body>
+</html>
