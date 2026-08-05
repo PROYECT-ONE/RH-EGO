@@ -1569,9 +1569,9 @@
                     movimientos.push({ fecha: c.fechaBaja, tipo: 'Baja', col: c, detalle: `${c.tipoBaja || ''} ${c.motivoBaja ? '- ' + c.motivoBaja : ''}` });
                 }
                 if (c.evaluaciones) {
-                    Object.entries(c.evaluaciones).forEach(([key, eval]) => {
-                        if (eval.aplicada) {
-                            movimientos.push({ fecha: eval.fecha, tipo: 'Evaluación', col: c, detalle: `${key.charAt(0).toUpperCase() + key.slice(1)} - ${eval.resultado}` });
+                    Object.entries(c.evaluaciones).forEach(([key, evaluation]) => {
+                        if (evaluation.aplicada) {
+                            movimientos.push({ fecha: evaluation.fecha, tipo: 'Evaluación', col: c, detalle: `${key.charAt(0).toUpperCase() + key.slice(1)} - ${evaluation.resultado}` });
                         }
                     });
                 }
@@ -1671,10 +1671,10 @@
                 hist.push({ fecha: v.inicio, tipo: 'Vacaciones', icon: 'fa-umbrella-beach', color: 'amber', desc: `${v.dias} días (${formatDate(v.inicio)} - ${formatDate(v.fin)})` });
             });
             if (c.evaluaciones) {
-                Object.entries(c.evaluaciones).forEach(([key, eval]) => {
-                    if (eval.aplicada) {
+                Object.entries(c.evaluaciones).forEach(([key, evaluation]) => {
+                    if (evaluation.aplicada) {
                         const labels = { onboarding: 'Onboarding', mes1: 'Mes 1', mes2: 'Mes 2', mes3: 'Mes 3', salida: 'Encuesta de Salida' };
-                        hist.push({ fecha: eval.fecha, tipo: 'Evaluación', icon: 'fa-clipboard-check', color: 'purple', desc: `${labels[key] || key} - ${eval.resultado}` });
+                        hist.push({ fecha: evaluation.fecha, tipo: 'Evaluación', icon: 'fa-clipboard-check', color: 'purple', desc: `${labels[key] || key} - ${evaluation.resultado}` });
                     }
                 });
             }
